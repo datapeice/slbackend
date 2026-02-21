@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -73,6 +75,8 @@ public class FileStorageService {
             String filename = folder + "/" + UUID.randomUUID() + extension;
 
             // Загружаем файл
+            Map<String, String> headers = new HashMap<>();
+            headers.put("x-amz-acl", "public-read");
             try (InputStream inputStream = file.getInputStream()) {
                 minioClient.putObject(
                         PutObjectArgs.builder()
@@ -80,6 +84,7 @@ public class FileStorageService {
                                 .object(filename)
                                 .stream(inputStream, file.getSize(), -1)
                                 .contentType(contentType)
+                                .headers(headers)
                                 .build()
                 );
             }
@@ -98,12 +103,15 @@ public class FileStorageService {
     public String uploadFromStream(InputStream inputStream, long size, String contentType, String folder, String extension) {
         try {
             String filename = folder + "/" + UUID.randomUUID() + extension;
+            Map<String, String> headers = new HashMap<>();
+            headers.put("x-amz-acl", "public-read");
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(bucketName)
                             .object(filename)
                             .stream(inputStream, size, -1)
                             .contentType(contentType)
+                            .headers(headers)
                             .build()
             );
             return buildPublicUrl(filename);

@@ -51,8 +51,10 @@ public class MinioConfig {
                             .bucket(bucketName)
                             .build()
             );
+        }
 
-            // Делаем bucket публичным для чтения
+        // Always apply public-read policy (needed for existing Bucketeer buckets too)
+        try {
             String policy = """
                 {
                     "Version": "2012-10-17",
@@ -73,6 +75,9 @@ public class MinioConfig {
                             .config(policy)
                             .build()
             );
+        } catch (Exception e) {
+            // Log but don't fail startup — Bucketeer may restrict policy changes
+            System.err.println("Warning: Could not set bucket policy: " + e.getMessage());
         }
 
         return minioClient;
