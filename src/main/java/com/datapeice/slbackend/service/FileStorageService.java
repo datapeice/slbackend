@@ -16,14 +16,31 @@ public class FileStorageService {
     private final MinioClient minioClient;
     private final String bucketName;
     private final String minioEndpoint;
+    private final String minioPublicUrl;
 
     public FileStorageService(
             MinioClient minioClient,
             @Value("${minio.bucket-name}") String bucketName,
-            @Value("${minio.endpoint}") String minioEndpoint) {
+            @Value("${minio.endpoint}") String minioEndpoint,
+            @Value("${minio.public-url:}") String minioPublicUrl) {
         this.minioClient = minioClient;
         this.bucketName = bucketName;
         this.minioEndpoint = minioEndpoint;
+        this.minioPublicUrl = (minioPublicUrl != null && !minioPublicUrl.isBlank()) ? minioPublicUrl : null;
+    }
+
+    /**
+     * Builds a public URL for a stored object.
+     * If minio.public-url is set, uses it as base (virtual-hosted-style for AWS S3).
+     * Otherwise falls back to path-style: endpoint/bucket/object.
+     */
+    private String buildPublicUrl(String filename) {
+        if (minioPublicUrl != null) {
+            // virtual-hosted-style: https://bucket.s3.region.amazonaws.com/key
+            return minioPublicUrl.stripTrailing() + "/" + filename;
+        }
+        // path-style fallback (local MinIO)
+        return minioEndpoint + "/" + bucketName + "/" + filename;
     }
 
     /**
@@ -68,7 +85,7 @@ public class FileStorageService {
             }
 
             // Возвращаем публичный URL
-            return minioEndpoint + "/" + bucketName + "/" + filename;
+            return buildPublicUrl(filename);
 
         } catch (Exception e) {
             throw new RuntimeException("Ошибка при загрузке файла: " + e.getMessage(), e);
@@ -89,7 +106,7 @@ public class FileStorageService {
                             .contentType(contentType)
                             .build()
             );
-            return minioEndpoint + "/" + bucketName + "/" + filename;
+            return buildPublicUrl(filename);
         } catch (Exception e) {
             throw new RuntimeException("Ошибка при загрузке файла из потока: " + e.getMessage(), e);
         }
@@ -135,14 +152,22 @@ public class FileStorageService {
     }
 
     /**
-     * Извлекает имя объекта из полного URL
+     * Извлекает имя объекта из полного URL.
+     * Handles both path-style (endpoint/bucket/key) and virtual-hosted-style (publicUrl/key).
      */
     private String extractObjectNameFromUrl(String fileUrl) {
-        if (fileUrl == null || !fileUrl.contains(bucketName)) {
-            return null;
+        if (fileUrl == null) return null;
+        // Try virtual-hosted-style first (publicUrl/key)
+        if (minioPublicUrl != null && fileUrl.startsWith(minioPublicUrl)) {
+            String base = minioPublicUrl.endsWith("/") ? minioPublicUrl : minioPublicUrl + "/";
+            return fileUrl.substring(base.length());
         }
-        int bucketIndex = fileUrl.indexOf(bucketName);
-        return fileUrl.substring(bucketIndex + bucketName.length() + 1);
+        // Fall back to path-style (endpoint/bucket/key)
+        if (fileUrl.contains(bucketName)) {
+            int bucketIndex = fileUrl.indexOf(bucketName);
+            return fileUrl.substring(bucketIndex + bucketName.length() + 1);
+        }
+        return null;
     }
 }
 
