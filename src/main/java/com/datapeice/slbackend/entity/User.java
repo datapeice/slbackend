@@ -36,6 +36,7 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     private UserRole role = UserRole.ROLE_USER;
 
+    @Column(columnDefinition = "TEXT")
     private String avatarUrl;
 
     private boolean banned = false;
