@@ -28,7 +28,7 @@ public class MinioConfig {
     private String region;
 
     @Bean
-    public MinioClient minioClient() throws Exception {
+    public MinioClient minioClient() {
         MinioClient.Builder builder = MinioClient.builder()
                 .endpoint(endpoint)
                 .credentials(accessKey, secretKey);
@@ -39,21 +39,29 @@ public class MinioConfig {
 
         MinioClient minioClient = builder.build();
 
-        boolean exists = minioClient.bucketExists(
-                BucketExistsArgs.builder()
-                        .bucket(bucketName)
-                        .build()
-        );
-
-        if (!exists) {
-            minioClient.makeBucket(
-                    MakeBucketArgs.builder()
+        // Try to check/create bucket, but don't fail startup if not possible
+        try {
+            boolean exists = minioClient.bucketExists(
+                    BucketExistsArgs.builder()
                             .bucket(bucketName)
                             .build()
             );
+
+            if (!exists) {
+                minioClient.makeBucket(
+                        MakeBucketArgs.builder()
+                                .bucket(bucketName)
+                                .build()
+                );
+                System.out.println("Created bucket: " + bucketName);
+            } else {
+                System.out.println("Bucket already exists: " + bucketName);
+            }
+        } catch (Exception e) {
+            System.err.println("Warning: Could not verify/create bucket (may already exist): " + e.getMessage());
         }
 
-        // Always apply public-read policy (needed for existing Bucketeer buckets too)
+        // Try to apply public-read policy (will fail on Bucketeer due to BlockPublicPolicy — that's OK)
         try {
             String policy = """
                 {
@@ -75,9 +83,9 @@ public class MinioConfig {
                             .config(policy)
                             .build()
             );
+            System.out.println("Applied public-read bucket policy.");
         } catch (Exception e) {
-            // Log but don't fail startup — Bucketeer may restrict policy changes
-            System.err.println("Warning: Could not set bucket policy: " + e.getMessage());
+            System.err.println("Warning: Could not set bucket policy (will use presigned URLs instead): " + e.getMessage());
         }
 
         return minioClient;
@@ -93,4 +101,3 @@ public class MinioConfig {
         return endpoint;
     }
 }
-

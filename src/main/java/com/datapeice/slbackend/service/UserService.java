@@ -23,14 +23,17 @@ public class UserService {
     private final EmailService emailService;
     private final DiscordService discordService;
     private final GeoIpService geoIpService;
+    private final FileStorageService fileStorageService;
 
     public UserService(UserRepository userRepository, BCryptPasswordEncoder passwordEncoder,
-                       EmailService emailService, DiscordService discordService, GeoIpService geoIpService) {
+                       EmailService emailService, DiscordService discordService, GeoIpService geoIpService,
+                       FileStorageService fileStorageService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
         this.discordService = discordService;
         this.geoIpService = geoIpService;
+        this.fileStorageService = fileStorageService;
     }
 
     @Transactional(readOnly = true)
@@ -372,6 +375,34 @@ public class UserService {
         return mapToResponse(user, false);
     }
 
+    /**
+     * Resolves an avatar URL or object key to a viewable URL.
+     * - Plain object key (e.g., "avatars/uuid.png") → generates presigned/public URL
+     * - Old full S3/MinIO URL → extracts object key, then generates fresh URL
+     * - External URL (Discord CDN etc.) → returned as-is
+     */
+    private String resolveAvatarUrl(String avatarUrl) {
+        if (avatarUrl == null || avatarUrl.isBlank()) return null;
+        if (!avatarUrl.startsWith("http://") && !avatarUrl.startsWith("https://")) {
+            // Stored as object key — generate fresh URL
+            try {
+                return fileStorageService.resolveUrl(avatarUrl);
+            } catch (Exception e) {
+                return avatarUrl;
+            }
+        }
+        // It's a full URL — try to extract object key and re-resolve (handles expired presigned URLs)
+        try {
+            String objectKey = fileStorageService.extractObjectKey(avatarUrl);
+            if (objectKey != null) {
+                return fileStorageService.resolveUrl(objectKey);
+            }
+        } catch (Exception ignored) {
+        }
+        // Fall back to original URL (e.g., Discord CDN)
+        return avatarUrl;
+    }
+
     private UserResponse mapToResponse(User user, boolean includeSecurityInfo) {
         UserResponse response = new UserResponse();
         response.setId(user.getId());
@@ -380,7 +411,7 @@ public class UserService {
         response.setDiscordNickname(user.getDiscordNickname());
         response.setMinecraftNickname(user.getMinecraftNickname());
         response.setRole(user.getRole());
-        response.setAvatarUrl(user.getAvatarUrl());
+        response.setAvatarUrl(resolveAvatarUrl(user.getAvatarUrl()));
         response.setBanned(user.isBanned());
         response.setBanReason(user.getBanReason());
         response.setEmailVerified(user.isEmailVerified());

@@ -30,14 +30,16 @@ public class FileController {
             if (user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty()) {
                 fileStorageService.deleteFile(user.getAvatarUrl());
             }
-            String fileUrl = fileStorageService.uploadFile(file, "avatars");
+            String objectKey = fileStorageService.uploadFile(file, "avatars");
 
-            user.setAvatarUrl(fileUrl);
+            user.setAvatarUrl(objectKey);
             userService.updateUserProfile(user, null);
 
+            // Resolve to a viewable URL for the response
+            String viewUrl = fileStorageService.resolveUrl(objectKey);
             return ResponseEntity.ok(Map.of(
                     "status", "success",
-                    "url", fileUrl,
+                    "url", viewUrl,
                     "message", "Аватар успешно загружен"
             ));
         } catch (IllegalArgumentException e) {
