@@ -42,6 +42,10 @@ dependencies {
     // MinIO for file storage
     implementation 'io.minio:minio:8.5.7'
 
+    // AWS SDK v2 for S3 presigned URLs (Bucketeer on Heroku)
+    implementation platform('software.amazon.awssdk:bom:2.29.52')
+    implementation 'software.amazon.awssdk:s3'
+
     // Mailgun for email
     implementation 'com.mailgun:mailgun-java:1.0.9'
 

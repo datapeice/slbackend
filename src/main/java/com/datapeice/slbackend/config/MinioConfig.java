@@ -7,6 +7,12 @@ import io.minio.SetBucketPolicyArgs;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+
+import java.net.URI;
 
 @Configuration
 public class MinioConfig {
@@ -89,6 +95,31 @@ public class MinioConfig {
         }
 
         return minioClient;
+    }
+
+    /**
+     * AWS SDK v2 S3Presigner for generating proper presigned URLs.
+     * Used when MINIO_ENDPOINT points to AWS S3.
+     */
+    @Bean
+    public S3Presigner s3Presigner() {
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKey, secretKey);
+        S3Presigner.Builder builder = S3Presigner.builder()
+                .credentialsProvider(StaticCredentialsProvider.create(credentials));
+
+        // Set region
+        if (region != null && !region.isBlank()) {
+            builder.region(Region.of(region));
+        } else {
+            builder.region(Region.US_EAST_1);
+        }
+
+        // If endpoint is not default AWS, set it (for local MinIO)
+        if (endpoint != null && !endpoint.contains("amazonaws.com")) {
+            builder.endpointOverride(URI.create(endpoint));
+        }
+
+        return builder.build();
     }
 
     @Bean
