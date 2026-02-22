@@ -8,6 +8,7 @@ import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.user.update.UserUpdateGlobalNameEvent;
 import net.dv8tion.jda.api.events.user.update.UserUpdateNameEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -59,28 +60,8 @@ public class DiscordService {
         this.userRepository = userRepository;
     }
 
-    @PostConstruct
-    public void init() {
-        if (!botEnabled || botToken.isBlank()) {
-            logger.info("Discord bot is disabled or token not configured");
-            return;
-        }
-        try {
-            jda = JDABuilder.createDefault(botToken)
-                    .enableIntents(
-                            GatewayIntent.GUILD_MEMBERS,
-                            GatewayIntent.GUILD_MESSAGES,
-                            GatewayIntent.DIRECT_MESSAGES)
-                    .setMemberCachePolicy(MemberCachePolicy.ALL)
-                    .addEventListeners(new NicknameListener())
-                    .build();
-            jda.awaitReady();
-            logger.info("Discord bot started successfully. Guilds: {}", jda.getGuilds().size());
-        } catch (Exception e) {
-            logger.error("Failed to start Discord bot: {}", e.getMessage());
-            jda = null;
-        }
-    }
+    private static final String MIMI_GIF_URL = "https://tenor.com/view/mimi-typh-heart-sit-mimi-the-dog-gif-13978401409055125823";
+    private static final String DATAPEICE_IMAGE_URL = "https://i.imgur.com/5hbmB3v.png";
 
     /**
      * JDA event listener that fires when a Discord user changes their username or
@@ -122,6 +103,48 @@ public class DiscordService {
             } catch (Exception e) {
                 logger.error("Failed to sync Discord nickname for userId={}: {}", discordUserId, e.getMessage());
             }
+        }
+    }
+
+    private class MessageListener extends ListenerAdapter {
+        @Override
+        public void onMessageReceived(net.dv8tion.jda.api.events.message.MessageReceivedEvent event) {
+            if (event.getAuthor().isBot()) return;
+            String content = event.getMessage().getContentDisplay().toLowerCase();
+            // Пасхалка: mimi/мими
+            if (content.contains("mimi") || content.contains("мими")) {
+                event.getMessage().reply(MIMI_GIF_URL).queue();
+                return;
+            }
+            // Пасхалка: @datapeice
+            if (content.contains("@datapeice")) {
+                event.getMessage().reply(DATAPEICE_IMAGE_URL).queue();
+            }
+        }
+    }
+
+    @PostConstruct
+    public void init() {
+        if (!botEnabled || botToken.isBlank()) {
+            logger.info("Discord bot is disabled or token not configured");
+            return;
+        }
+        try {
+            jda = JDABuilder.createDefault(botToken)
+                    .enableIntents(
+                            GatewayIntent.GUILD_MEMBERS,
+                            GatewayIntent.GUILD_MESSAGES,
+                            GatewayIntent.DIRECT_MESSAGES,
+                            GatewayIntent.MESSAGE_CONTENT)
+                    .setMemberCachePolicy(MemberCachePolicy.ALL)
+                    .addEventListeners(new NicknameListener())
+                    .addEventListeners(new MessageListener())
+                    .build();
+            jda.awaitReady();
+            logger.info("Discord bot started successfully. Guilds: {}", jda.getGuilds().size());
+        } catch (Exception e) {
+            logger.error("Failed to start Discord bot: {}", e.getMessage());
+            jda = null;
         }
     }
 

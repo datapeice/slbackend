@@ -14,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -197,6 +196,7 @@ public class ApplicationService {
                         "**Приветствую!**\n" +
                                 "Ваша заявка на вступление на сервер **StoryLegends** была принята!\n" +
                                 "Комментарий от администрации: *" + reason + "*\n" +
+                                "\n**Администратор:** " + adminName + "\n" +
                                 "Добро пожаловать на наш сервер, дабы **начать играть** вам нужно **прочитать** канал <#1229044440178626660>.\n"
                                 +
                                 "Так-же если вы ещё не ознакомилсь с [правилами](https://www.storylegends.xyz/rules) сервера, то обязательно это сделайте!\n"
@@ -217,10 +217,11 @@ public class ApplicationService {
                 String reason = request.getAdminComment() != null ? request.getAdminComment() : "Причина не указана";
                 discordService.sendDirectMessage(user.getDiscordUserId(),
                         "**Приветствую!**\n" +
-                                "Ваша заявка на вступление на сервер **StoryLegends** к сожелению было **отклонена**!\n"
+                                "Ваша заявка на вступление на сервер **StoryLegends** к сожелению была **отклонена**!\n"
                                 +
-                                "Комментарий от администрации: *" + reason
-                                + "* \n***С уважением, <:slteam:1244336090928906351>***");
+                                "Комментарий от администрации: *" + reason + "*\n" +
+                                "\n**Администратор:** " + adminName + "\n" +
+                                "***С уважением, <:slteam:1244336090928906351>***");
             }
         }
 
