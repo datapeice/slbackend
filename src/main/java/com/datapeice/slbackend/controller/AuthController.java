@@ -184,8 +184,10 @@ public class AuthController {
             user.setEmailVerificationTokenExpiry(System.currentTimeMillis() + emailVerificationExpiration);
 
             userRepository.save(user);
-            auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER", "Зарегистрировался на сервере",
-                    null, null);
+            auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER",
+                    String.format("Зарегистрировался (MC: %s, Discord: %s)", user.getMinecraftNickname(),
+                            user.getDiscordNickname()),
+                    user.getId(), user.getUsername());
 
             // Отправляем письмо подтверждения
             if (emailEnabled) {
@@ -204,7 +206,10 @@ public class AuthController {
 
         // Если auto-verify включен, сразу логиним пользователя
         userRepository.save(user);
-        auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER", "Зарегистрировался", null, null);
+        auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER",
+                String.format("Зарегистрировался (MC: %s, Discord: %s)", user.getMinecraftNickname(),
+                        user.getDiscordNickname()),
+                user.getId(), user.getUsername());
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 user, null, user.getAuthorities());
@@ -265,6 +270,9 @@ public class AuthController {
         user.setEmailVerificationToken(null);
         user.setEmailVerificationTokenExpiry(null);
         userRepository.save(user);
+
+        auditLogService.logAction(user.getId(), user.getUsername(), "USER_VERIFY_EMAIL",
+                "Успешно подтвердил email", user.getId(), user.getUsername());
 
         logger.info("Email verified successfully for user: {}", user.getUsername());
 
@@ -374,6 +382,9 @@ public class AuthController {
         user.setEmailVerificationToken(verificationToken);
         user.setEmailVerificationTokenExpiry(System.currentTimeMillis() + emailVerificationExpiration);
         userRepository.save(user);
+
+        auditLogService.logAction(user.getId(), user.getUsername(), "USER_RESEND_VERIFICATION",
+                "Запросил повторное письмо подтверждения email", user.getId(), user.getUsername());
 
         // Отправляем письмо
         if (emailEnabled) {
@@ -526,6 +537,9 @@ public class AuthController {
 
             userRepository.save(user);
 
+            auditLogService.logAction(user.getId(), user.getUsername(), "USER_CONNECT_DISCORD",
+                    "Привязал Discord через OAuth: " + discordUser.displayName(), user.getId(), user.getUsername());
+
             logger.info("Discord account connected via OAuth callback for user {} -> discordId={}, nick={}",
                     user.getUsername(), discordUser.id(), discordUser.displayName());
 
@@ -613,6 +627,9 @@ public class AuthController {
 
         userRepository.save(user);
 
+        auditLogService.logAction(user.getId(), user.getUsername(), "USER_CONNECT_DISCORD",
+                "Привязал Discord аккаунт: " + discordUser.displayName(), user.getId(), user.getUsername());
+
         logger.info("Discord account connected for user {} -> discordId={}, nick={}",
                 user.getUsername(), discordUser.id(), discordUser.displayName());
 
@@ -635,6 +652,9 @@ public class AuthController {
         user.setDiscordVerified(false);
         user.setDiscordUserId(null);
         userRepository.save(user);
+
+        auditLogService.logAction(user.getId(), user.getUsername(), "USER_DISCONNECT_DISCORD",
+                "Отвязал Discord аккаунт", user.getId(), user.getUsername());
 
         return ResponseEntity.ok(Map.of("status", "success", "message", "Discord аккаунт отвязан."));
     }

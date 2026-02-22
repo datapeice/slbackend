@@ -115,7 +115,7 @@ public class UserService {
         }
 
         if (request.getBio() != null && !request.getBio().equals(user.getBio())) {
-            changes.add("Bio updated");
+            changes.add(String.format("Bio updated (%d characters)", request.getBio().length()));
             user.setBio(request.getBio());
         }
 
@@ -296,7 +296,7 @@ public class UserService {
         }
 
         if (request.getBio() != null && !request.getBio().equals(user.getBio())) {
-            changes.add("Bio updated");
+            changes.add(String.format("Bio updated (%d characters)", request.getBio().length()));
             user.setBio(request.getBio());
         }
 
@@ -420,6 +420,9 @@ public class UserService {
             userRepository.save(user);
 
             emailService.sendForgotPasswordEmail(user.getEmail(), user.getUsername(), token);
+
+            auditLogService.logAction(user.getId(), user.getUsername(), "USER_FORGOT_PASSWORD",
+                    "Запросил восстановление пароля через email", user.getId(), user.getUsername());
         });
     }
 
@@ -437,6 +440,9 @@ public class UserService {
         user.setResetPasswordToken(null);
         user.setResetPasswordTokenExpiry(null);
         userRepository.save(user);
+
+        auditLogService.logAction(user.getId(), user.getUsername(), "USER_RESET_PASSWORD",
+                "Успешно изменил пароль через токен восстановления", user.getId(), user.getUsername());
     }
 
     private String generateRandomPassword() {
@@ -569,9 +575,8 @@ public class UserService {
 
             // Log login action
             auditLogService.logAction(user.getId(), user.getUsername(), "USER_LOGIN",
-                    String.format("Пользователь %s залогинился с IP %s, User-Agent: %s", user.getUsername(), geoIp,
-                            userAgent),
-                    null, null);
+                    String.format("Вход в систему (IP: %s, UA: %s)", geoIp, userAgent),
+                    user.getId(), user.getUsername());
         });
     }
 }
