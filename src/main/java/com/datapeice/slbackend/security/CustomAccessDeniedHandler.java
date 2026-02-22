@@ -43,7 +43,7 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
 .▀▄▒▒▒▒▒▄▀▒▀▄▒▒▒▒▒▄▀
 .. ▀▀▀▀▀     ▀▀▀▀▀
 
-ACCES DENIED NOOB xDDDDD
+ACCESS DENIED (403) NOOB xDDDDD
 I love you Palantir <3
 """;
         PrintWriter writer = response.getWriter();
