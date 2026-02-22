@@ -19,6 +19,7 @@ public class Application {
     private User user;
 
     private String firstName;
+    @Column(nullable = false)
     private Integer age;
 
     @Column(columnDefinition = "TEXT")

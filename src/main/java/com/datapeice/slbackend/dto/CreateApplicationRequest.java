@@ -3,6 +3,8 @@ package com.datapeice.slbackend.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import lombok.Data;
 
 @Data
@@ -12,6 +14,8 @@ public class CreateApplicationRequest {
     private String firstName;
 
     @NotNull(message = "Возраст не может быть пустым")
+    @Min(value = 0, message = "Возраст не может быть меньше 0")
+    @Max(value = 126, message = "Возраст не может быть больше 126")
     private Integer age;
 
     @NotBlank(message = "Расскажите, почему хотите играть у нас")
