@@ -19,5 +19,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
     boolean existsByDiscordNickname(String discordNickname);
     boolean existsByMinecraftNickname(String minecraftNickname);
+    Optional<User> findByDiscordUserId(String discordUserId);
     List<User> findAllByBadgesContaining(Badge badge);
 }

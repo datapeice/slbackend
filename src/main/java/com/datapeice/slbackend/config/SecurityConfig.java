@@ -2,8 +2,11 @@ package com.datapeice.slbackend.config;
 
 import com.datapeice.slbackend.security.JwtRequestFilter;
 import com.datapeice.slbackend.service.CustomUserDetailsService;
+import com.datapeice.slbackend.security.CustomAccessDeniedHandler;
+import com.datapeice.slbackend.security.CustomAuthenticationEntryPoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -14,7 +17,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.http.HttpMethod;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -25,61 +27,94 @@ import java.util.Arrays;
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
-    private final JwtRequestFilter jwtRequestFilter;
-    private final CustomUserDetailsService userDetailsService;
+        private final JwtRequestFilter jwtRequestFilter;
+        private final CustomUserDetailsService userDetailsService;
+        private final CustomAccessDeniedHandler customAccessDeniedHandler;
+        private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
-    SecurityConfig(JwtRequestFilter jwtRequestFilter, CustomUserDetailsService userDetailsService) {
-        this.jwtRequestFilter = jwtRequestFilter;
-        this.userDetailsService = userDetailsService;
-    }
+        SecurityConfig(JwtRequestFilter jwtRequestFilter, CustomUserDetailsService userDetailsService,
+                        CustomAccessDeniedHandler customAccessDeniedHandler,
+                        CustomAuthenticationEntryPoint customAuthenticationEntryPoint) {
+                this.jwtRequestFilter = jwtRequestFilter;
+                this.userDetailsService = userDetailsService;
+                this.customAccessDeniedHandler = customAccessDeniedHandler;
+                this.customAuthenticationEntryPoint = customAuthenticationEntryPoint;
+        }
 
-    @Bean
-    public BCryptPasswordEncoder bCryptPasswordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+        @Bean
+        public BCryptPasswordEncoder bCryptPasswordEncoder() {
+                return new BCryptPasswordEncoder();
+        }
 
-    @Bean
-    public DaoAuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(userDetailsService);
-        authProvider.setPasswordEncoder(bCryptPasswordEncoder());
-        return authProvider;
-    }
+        @Bean
+        public DaoAuthenticationProvider authenticationProvider() {
+                DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+                authProvider.setUserDetailsService(userDetailsService);
+                authProvider.setPasswordEncoder(bCryptPasswordEncoder());
+                return authProvider;
+        }
 
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .authenticationProvider(authenticationProvider()) // Explicitly set provider
-                .sessionManagement(sessionManagement ->
-                        sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/users").permitAll()
-                        .requestMatchers("/error").permitAll()
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .anyRequest().authenticated())
-                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+        @Bean
+        public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+                http
+                                .csrf(csrf -> csrf.disable())
+                                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                                .exceptionHandling(exceptionHandling -> exceptionHandling
+                                                .accessDeniedHandler(customAccessDeniedHandler)
+                                                .authenticationEntryPoint(customAuthenticationEntryPoint))
+                                .authenticationProvider(authenticationProvider()) // Explicitly set provider
+                                .sessionManagement(sessionManagement -> sessionManagement
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                .authorizeHttpRequests(auth -> auth
+                                                // Discord OAuth2 callback - Discord redirects here without Origin
+                                                // header
+                                                .requestMatchers(HttpMethod.GET, "/api/auth/discord/callback")
+                                                .permitAll()
+                                                .requestMatchers(request -> request.getRequestURI()
+                                                                .startsWith("/api/auth/") &&
+                                                                request.getHeader("Origin") != null &&
+                                                                java.util.Arrays.asList(
+                                                                                "http://localhost:5173",
+                                                                                "https://www.storylegends.xyz",
+                                                                                "https://storylegends.xyz",
+                                                                                "https://test.storylegends.xyz")
+                                                                                .contains(request.getHeader("Origin")))
+                                                .permitAll()
+                                                .requestMatchers(request -> request.getMethod().equals("GET") &&
+                                                                request.getRequestURI().equals("/api/users") &&
+                                                                request.getHeader("Origin") != null &&
+                                                                java.util.Arrays.asList(
+                                                                                "http://localhost:5173",
+                                                                                "https://www.storylegends.xyz",
+                                                                                "https://storylegends.xyz",
+                                                                                "https://test.storylegends.xyz")
+                                                                                .contains(request.getHeader("Origin")))
+                                                .permitAll()
+                                                .requestMatchers("/error").permitAll()
+                                                .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "MODERATOR")
+                                                .anyRequest().authenticated())
+                                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
-        return http.build();
-    }
+                return http.build();
+        }
 
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173", "https://www.storylegends.xyz", "https://storylegends.xyz", "https://test.storylegends.xyz/"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setAllowCredentials(true);
+        @Bean
+        public CorsConfigurationSource corsConfigurationSource() {
+                CorsConfiguration configuration = new CorsConfiguration();
+                configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173", "https://www.storylegends.xyz",
+                                "https://storylegends.xyz", "https://test.storylegends.xyz"));
+                configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                configuration.setAllowedHeaders(Arrays.asList("*"));
+                configuration.setAllowCredentials(true);
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
-    }
+                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+                source.registerCorsConfiguration("/**", configuration);
+                return source;
+        }
 
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-        return authenticationConfiguration.getAuthenticationManager();
-    }
+        @Bean
+        public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration)
+                        throws Exception {
+                return authenticationConfiguration.getAuthenticationManager();
+        }
 }

@@ -36,7 +36,7 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     private UserRole role = UserRole.ROLE_USER;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "avatar_url", columnDefinition = "TEXT")
     private String avatarUrl;
 
     private boolean banned = false;
@@ -69,6 +69,9 @@ public class User implements UserDetails {
 
     // Discord User ID for DM notifications and role management
     private String discordUserId;
+
+    // Discord OAuth verification - account is active only when discord is verified
+    private boolean discordVerified = false;
 
     // Security logging
     private String registrationIp;

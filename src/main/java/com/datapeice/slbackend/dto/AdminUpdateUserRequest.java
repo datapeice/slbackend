@@ -21,4 +21,6 @@ public class AdminUpdateUserRequest {
     private String bio;
 
     private Boolean isPlayer;
+
+    private String role;
 }

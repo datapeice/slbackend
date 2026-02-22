@@ -169,6 +169,43 @@ public class EmailService {
         sendEmail(toEmail, "Обновление статуса заявки - StoryLegends", wrapHtml(content));
     }
 
+    public void sendBanEmail(String toEmail, String username, String reason) {
+        if (!emailEnabled) return;
+
+        String content = String.format("""
+            <h1 style="color: #F44336; font-size: 28px; margin: 0 0 20px 0; text-transform: uppercase; letter-spacing: 2px;">🚫 Аккаунт заблокирован</h1>
+            <p style="color: #e0e0e0; font-size: 16px; line-height: 1.6; margin: 0 0 30px 0;">
+                Привет, <b style="color: #4a9fd8;">%s</b>.<br>
+                Ваш аккаунт на StoryLegends был <b style="color: #F44336;">заблокирован</b> администрацией.
+            </p>
+            <div style="background: #1a1a1a; border: 1px dashed #F44336; padding: 25px; border-radius: 12px; margin: 20px 0;">
+                <span style="color: #888; font-size: 12px; display: block; margin-bottom: 10px; letter-spacing: 2px;">ПРИЧИНА БЛОКИРОВКИ</span>
+                <p style="color: #e0e0e0; margin: 0;">%s</p>
+            </div>
+            <p style="color: #888; font-size: 14px;">Если вы считаете, что блокировка была ошибочной, свяжитесь с администрацией через Discord.</p>
+            """, username, reason != null ? reason : "Причина не указана");
+
+        sendEmail(toEmail, "Аккаунт заблокирован - StoryLegends", wrapHtml(content));
+    }
+
+    public void sendWarningEmail(String toEmail, String username, String reason) {
+        if (!emailEnabled) return;
+
+        String content = String.format("""
+            <h1 style="color: #FF9800; font-size: 28px; margin: 0 0 20px 0; text-transform: uppercase; letter-spacing: 2px;">⚠️ Предупреждение</h1>
+            <p style="color: #e0e0e0; font-size: 16px; line-height: 1.6; margin: 0 0 30px 0;">
+                Привет, <b>%s</b>. Ты получил предупреждение от администрации сервера StoryLegends.
+            </p>
+            <div style="background: #1a1a1a; border: 1px dashed #FF9800; padding: 25px; border-radius: 12px; margin: 20px 0;">
+                <span style="color: #888; font-size: 12px; display: block; margin-bottom: 10px; letter-spacing: 2px;">ПРИЧИНА</span>
+                <p style="color: #e0e0e0; margin: 0;">%s</p>
+            </div>
+            <p style="color: #888; font-size: 14px;">Пожалуйста, ознакомься с правилами сервера, чтобы избежать дальнейших предупреждений.</p>
+            """, username, reason != null ? reason : "Причина не указана");
+
+        sendEmail(toEmail, "Предупреждение - StoryLegends", wrapHtml(content));
+    }
+
     private void sendEmail(String toEmail, String subject, String htmlBody) {
         try {
             MailgunMessagesApi mailgunMessagesApi = MailgunClient.config(baseUrl, apiKey)

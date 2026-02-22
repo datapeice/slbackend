@@ -1,5 +1,6 @@
 package com.datapeice.slbackend.service;
 
+import com.datapeice.slbackend.repository.UserRepository;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
@@ -7,6 +8,9 @@ import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
+import net.dv8tion.jda.api.events.user.update.UserUpdateGlobalNameEvent;
+import net.dv8tion.jda.api.events.user.update.UserUpdateNameEvent;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import org.slf4j.Logger;
@@ -39,15 +43,20 @@ public class DiscordService {
     @Value("${discord.sl-role.id:}")
     private String slRoleId;
 
+    @Value("${discord.applications-channel.id:}")
+    private String applicationsChannelId;
+
     @Value("${discord.bot.enabled:false}")
     private boolean botEnabled;
 
     private JDA jda;
 
     private final FileStorageService fileStorageService;
+    private final UserRepository userRepository;
 
-    public DiscordService(FileStorageService fileStorageService) {
+    public DiscordService(FileStorageService fileStorageService, UserRepository userRepository) {
         this.fileStorageService = fileStorageService;
+        this.userRepository = userRepository;
     }
 
     @PostConstruct
@@ -61,15 +70,58 @@ public class DiscordService {
                     .enableIntents(
                             GatewayIntent.GUILD_MEMBERS,
                             GatewayIntent.GUILD_MESSAGES,
-                            GatewayIntent.DIRECT_MESSAGES
-                    )
+                            GatewayIntent.DIRECT_MESSAGES)
                     .setMemberCachePolicy(MemberCachePolicy.ALL)
+                    .addEventListeners(new NicknameListener())
                     .build();
             jda.awaitReady();
             logger.info("Discord bot started successfully. Guilds: {}", jda.getGuilds().size());
         } catch (Exception e) {
             logger.error("Failed to start Discord bot: {}", e.getMessage());
             jda = null;
+        }
+    }
+
+    /**
+     * JDA event listener that fires when a Discord user changes their username or
+     * global name.
+     * Finds the matching site user by discordUserId and updates their
+     * discordNickname.
+     */
+    private class NicknameListener extends ListenerAdapter {
+
+        @Override
+        public void onUserUpdateName(UserUpdateNameEvent event) {
+            String discordUserId = event.getUser().getId();
+            String newName = event.getNewName();
+            syncNickname(discordUserId, newName, "username");
+        }
+
+        @Override
+        public void onUserUpdateGlobalName(UserUpdateGlobalNameEvent event) {
+            String discordUserId = event.getUser().getId();
+            String newGlobalName = event.getNewGlobalName();
+            if (newGlobalName == null) {
+                // Global name removed — fall back to username
+                newGlobalName = event.getUser().getName();
+            }
+            syncNickname(discordUserId, newGlobalName, "global_name");
+        }
+
+        private void syncNickname(String discordUserId, String newNickname, String source) {
+            try {
+                userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
+                    String oldNickname = user.getDiscordNickname();
+                    if (!newNickname.equals(oldNickname)) {
+                        user.setDiscordNickname(newNickname);
+                        userRepository.save(user);
+                        logger.info("Auto-synced Discord {} for userId={}: '{}' -> '{}'",
+                                source, discordUserId, oldNickname, newNickname);
+                    }
+                });
+            } catch (Exception e) {
+                logger.error("Failed to sync Discord nickname for userId={}: {}", discordUserId, e.getMessage());
+            }
         }
     }
 
@@ -109,12 +161,12 @@ public class DiscordService {
         try {
             // Force load ALL members from Discord API (not just cache)
             List<Member> members = guild.loadMembers().get();
-            boolean found = members.stream().anyMatch(m ->
-                    m.getUser().getName().toLowerCase().equals(finalSearch) ||
+            boolean found = members.stream().anyMatch(m -> m.getUser().getName().toLowerCase().equals(finalSearch) ||
                     (m.getNickname() != null && m.getNickname().toLowerCase().equals(finalSearch)) ||
-                    (m.getUser().getGlobalName() != null && m.getUser().getGlobalName().toLowerCase().equals(finalSearch))
-            );
-            logger.info("Discord guild membership check for '{}': {} (total members: {})", discordNickname, found, members.size());
+                    (m.getUser().getGlobalName() != null
+                            && m.getUser().getGlobalName().toLowerCase().equals(finalSearch)));
+            logger.info("Discord guild membership check for '{}': {} (total members: {})", discordNickname, found,
+                    members.size());
             return found;
         } catch (Exception e) {
             logger.error("Failed to load guild members: {}", e.getMessage());
@@ -127,9 +179,11 @@ public class DiscordService {
      * Find Discord user ID by nickname (username).
      */
     public Optional<String> findDiscordUserId(String discordNickname) {
-        if (!isEnabled()) return Optional.empty();
+        if (!isEnabled())
+            return Optional.empty();
         Guild guild = jda.getGuildById(guildId);
-        if (guild == null) return Optional.empty();
+        if (guild == null)
+            return Optional.empty();
 
         String searchName = discordNickname.toLowerCase().trim();
         if (searchName.contains("#")) {
@@ -140,11 +194,10 @@ public class DiscordService {
         try {
             List<Member> members = guild.loadMembers().get();
             return members.stream()
-                    .filter(m ->
-                            m.getUser().getName().toLowerCase().equals(finalSearch) ||
+                    .filter(m -> m.getUser().getName().toLowerCase().equals(finalSearch) ||
                             (m.getNickname() != null && m.getNickname().toLowerCase().equals(finalSearch)) ||
-                            (m.getUser().getGlobalName() != null && m.getUser().getGlobalName().toLowerCase().equals(finalSearch))
-                    )
+                            (m.getUser().getGlobalName() != null
+                                    && m.getUser().getGlobalName().toLowerCase().equals(finalSearch)))
                     .map(m -> m.getUser().getId())
                     .findFirst();
         } catch (Exception e) {
@@ -157,14 +210,14 @@ public class DiscordService {
      * Send a private DM to a Discord user by their user ID.
      */
     public void sendDirectMessage(String discordUserId, String message) {
-        if (!isEnabled() || discordUserId == null || discordUserId.isBlank()) return;
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank())
+            return;
         try {
             jda.retrieveUserById(discordUserId).queue(user -> {
                 user.openPrivateChannel().queue(channel -> {
                     channel.sendMessage(message).queue(
                             success -> logger.info("DM sent to Discord user: {}", discordUserId),
-                            error -> logger.error("Failed to send DM to {}: {}", discordUserId, error.getMessage())
-                    );
+                            error -> logger.error("Failed to send DM to {}: {}", discordUserId, error.getMessage()));
                 });
             }, error -> logger.error("Failed to find Discord user {}: {}", discordUserId, error.getMessage()));
         } catch (Exception e) {
@@ -173,12 +226,43 @@ public class DiscordService {
     }
 
     /**
+     * Notify admins about a new application.
+     * Uses discord.applications-channel.id if set, else sends DM to users with
+     * ADMIN/MODERATOR roles.
+     */
+    public void notifyAdminsAboutNewApplication(String applicantUsername) {
+        if (!isEnabled())
+            return;
+        String message = "📢 **Новая заявка!**\nПользователь **" + applicantUsername
+                + "** подал заявку на вступление. Зайдите в Админ Панель для рассмотрения.";
+
+        if (applicationsChannelId != null && !applicationsChannelId.isBlank()) {
+            net.dv8tion.jda.api.entities.channel.concrete.TextChannel channel = jda
+                    .getTextChannelById(applicationsChannelId);
+            if (channel != null) {
+                channel.sendMessage(message).queue();
+                return;
+            }
+        }
+
+        // Fallback: send DM to all admins/mods
+        userRepository.findAll().stream()
+                .filter(u -> u.getRole() == com.datapeice.slbackend.entity.UserRole.ROLE_ADMIN
+                        || u.getRole() == com.datapeice.slbackend.entity.UserRole.ROLE_MODERATOR)
+                .map(com.datapeice.slbackend.entity.User::getDiscordUserId)
+                .filter(id -> id != null && !id.isBlank())
+                .forEach(id -> sendDirectMessage(id, message));
+    }
+
+    /**
      * Assign the @SL role to a Discord user by their user ID.
      */
     public void assignSlRole(String discordUserId) {
-        if (!isEnabled() || discordUserId == null || discordUserId.isBlank() || slRoleId.isBlank()) return;
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank() || slRoleId.isBlank())
+            return;
         Guild guild = jda.getGuildById(guildId);
-        if (guild == null) return;
+        if (guild == null)
+            return;
         Role role = guild.getRoleById(slRoleId);
         if (role == null) {
             logger.error("SL role not found: {}", slRoleId);
@@ -187,8 +271,7 @@ public class DiscordService {
         guild.retrieveMemberById(discordUserId).queue(member -> {
             guild.addRoleToMember(member, role).queue(
                     success -> logger.info("SL role assigned to {}", discordUserId),
-                    error -> logger.error("Failed to assign SL role to {}: {}", discordUserId, error.getMessage())
-            );
+                    error -> logger.error("Failed to assign SL role to {}: {}", discordUserId, error.getMessage()));
         }, error -> logger.error("Member not found: {}", discordUserId));
     }
 
@@ -196,16 +279,18 @@ public class DiscordService {
      * Remove the @SL role from a Discord user.
      */
     public void removeSlRole(String discordUserId) {
-        if (!isEnabled() || discordUserId == null || discordUserId.isBlank() || slRoleId.isBlank()) return;
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank() || slRoleId.isBlank())
+            return;
         Guild guild = jda.getGuildById(guildId);
-        if (guild == null) return;
+        if (guild == null)
+            return;
         Role role = guild.getRoleById(slRoleId);
-        if (role == null) return;
+        if (role == null)
+            return;
         guild.retrieveMemberById(discordUserId).queue(member -> {
             guild.removeRoleFromMember(member, role).queue(
                     success -> logger.info("SL role removed from {}", discordUserId),
-                    error -> logger.error("Failed to remove SL role from {}: {}", discordUserId, error.getMessage())
-            );
+                    error -> logger.error("Failed to remove SL role from {}: {}", discordUserId, error.getMessage()));
         }, error -> logger.warn("Member not found for role removal: {}", discordUserId));
     }
 
@@ -213,9 +298,11 @@ public class DiscordService {
      * Assign a specific Discord role to a user (for badge sync).
      */
     public void assignRole(String discordUserId, String roleId) {
-        if (!isEnabled() || discordUserId == null || roleId == null || roleId.isBlank()) return;
+        if (!isEnabled() || discordUserId == null || roleId == null || roleId.isBlank())
+            return;
         Guild guild = jda.getGuildById(guildId);
-        if (guild == null) return;
+        if (guild == null)
+            return;
         Role role = guild.getRoleById(roleId);
         if (role == null) {
             logger.error("Role not found: {}", roleId);
@@ -224,8 +311,8 @@ public class DiscordService {
         guild.retrieveMemberById(discordUserId).queue(member -> {
             guild.addRoleToMember(member, role).queue(
                     success -> logger.info("Role {} assigned to {}", roleId, discordUserId),
-                    error -> logger.error("Failed to assign role {} to {}: {}", roleId, discordUserId, error.getMessage())
-            );
+                    error -> logger.error("Failed to assign role {} to {}: {}", roleId, discordUserId,
+                            error.getMessage()));
         }, error -> logger.warn("Member not found: {}", discordUserId));
     }
 
@@ -233,16 +320,19 @@ public class DiscordService {
      * Remove a specific Discord role from a user (for badge sync).
      */
     public void removeRole(String discordUserId, String roleId) {
-        if (!isEnabled() || discordUserId == null || roleId == null || roleId.isBlank()) return;
+        if (!isEnabled() || discordUserId == null || roleId == null || roleId.isBlank())
+            return;
         Guild guild = jda.getGuildById(guildId);
-        if (guild == null) return;
+        if (guild == null)
+            return;
         Role role = guild.getRoleById(roleId);
-        if (role == null) return;
+        if (role == null)
+            return;
         guild.retrieveMemberById(discordUserId).queue(member -> {
             guild.removeRoleFromMember(member, role).queue(
                     success -> logger.info("Role {} removed from {}", roleId, discordUserId),
-                    error -> logger.error("Failed to remove role {} from {}: {}", roleId, discordUserId, error.getMessage())
-            );
+                    error -> logger.error("Failed to remove role {} from {}: {}", roleId, discordUserId,
+                            error.getMessage()));
         }, error -> logger.warn("Member not found: {}", discordUserId));
     }
 
@@ -250,7 +340,8 @@ public class DiscordService {
      * Get list of guild members (for server membership check).
      */
     public int getGuildMemberCount() {
-        if (!isEnabled()) return 0;
+        if (!isEnabled())
+            return 0;
         Guild guild = jda.getGuildById(guildId);
         return guild != null ? guild.getMemberCount() : 0;
     }
@@ -260,11 +351,13 @@ public class DiscordService {
      * Returns the new MinIO URL, or null if failed.
      */
     public String syncDiscordAvatar(String discordUserId) {
-        if (!isEnabled() || discordUserId == null || discordUserId.isBlank()) return null;
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank())
+            return null;
         try {
             // Get avatar URL from Discord
             User discordUser = jda.retrieveUserById(discordUserId).complete();
-            if (discordUser == null) return null;
+            if (discordUser == null)
+                return null;
 
             String avatarUrl = discordUser.getAvatarUrl();
             if (avatarUrl == null) {
@@ -296,8 +389,7 @@ public class DiscordService {
             long contentLength = response.headers().firstValueAsLong("content-length").orElse(-1);
 
             String minioUrl = fileStorageService.uploadFromStream(
-                    response.body(), contentLength, contentType, "avatars", extension
-            );
+                    response.body(), contentLength, contentType, "avatars", extension);
 
             logger.info("Discord avatar synced to MinIO for discordUserId={}: {}", discordUserId, minioUrl);
             return minioUrl;
@@ -308,4 +400,3 @@ public class DiscordService {
         }
     }
 }
-

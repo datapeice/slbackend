@@ -7,6 +7,8 @@ import com.datapeice.slbackend.dto.UpdateUserRequest;
 import com.datapeice.slbackend.dto.UserResponse;
 import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.entity.UserRole;
+import com.datapeice.slbackend.entity.SiteSettings;
+import com.datapeice.slbackend.repository.SiteSettingsRepository;
 import com.datapeice.slbackend.repository.UserRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -24,16 +26,25 @@ public class UserService {
     private final DiscordService discordService;
     private final GeoIpService geoIpService;
     private final FileStorageService fileStorageService;
+    private final SiteSettingsService siteSettingsService;
+    private final AuditLogService auditLogService;
 
     public UserService(UserRepository userRepository, BCryptPasswordEncoder passwordEncoder,
-                       EmailService emailService, DiscordService discordService, GeoIpService geoIpService,
-                       FileStorageService fileStorageService) {
+            EmailService emailService, DiscordService discordService, GeoIpService geoIpService,
+            FileStorageService fileStorageService, SiteSettingsService siteSettingsService,
+            AuditLogService auditLogService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
         this.discordService = discordService;
         this.geoIpService = geoIpService;
         this.fileStorageService = fileStorageService;
+        this.siteSettingsService = siteSettingsService;
+        this.auditLogService = auditLogService;
+    }
+
+    private SiteSettings getSiteSettings() {
+        return siteSettingsService.getSettings();
     }
 
     @Transactional(readOnly = true)
@@ -49,7 +60,8 @@ public class UserService {
 
     @Transactional
     public void syncDiscordAvatarForUser(User user) {
-        if (user.getDiscordUserId() == null) return;
+        if (user.getDiscordUserId() == null)
+            return;
         String url = discordService.syncDiscordAvatar(user.getDiscordUserId());
         if (url != null) {
             user.setAvatarUrl(url);
@@ -59,16 +71,20 @@ public class UserService {
 
     @Transactional
     public UserResponse updateUserProfile(User user, UpdateUserRequest request) {
-        // Если request null - обновляем только то что уже изменено в user (например аватар)
+        // Если request null - обновляем только то что уже изменено в user (например
+        // аватар)
         if (request == null) {
             User updated = userRepository.save(user);
             return mapToResponse(updated);
         }
 
+        java.util.List<String> changes = new java.util.ArrayList<>();
+
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
             if (userRepository.existsByEmail(request.getEmail())) {
                 throw new IllegalArgumentException("Email уже используется");
             }
+            changes.add("Email: " + user.getEmail() + " -> " + request.getEmail());
             user.setEmail(request.getEmail());
         }
 
@@ -76,32 +92,30 @@ public class UserService {
             if (userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
                 throw new IllegalArgumentException("Discord никнейм уже используется");
             }
+            changes.add("Discord Nick: " + user.getDiscordNickname() + " -> " + request.getDiscordNickname());
             user.setDiscordNickname(request.getDiscordNickname());
-            // Re-resolve Discord user ID and pull fresh avatar for new nickname
-            if (discordService.isEnabled()) {
-                discordService.findDiscordUserId(request.getDiscordNickname())
-                        .ifPresent(id -> {
-                            user.setDiscordUserId(id);
-                            String newAvatar = discordService.syncDiscordAvatar(id);
-                            if (newAvatar != null) {
-                                user.setAvatarUrl(newAvatar);
-                            }
-                        });
-            }
+            // When discord nickname changes, reset verification - user must re-verify via
+            // OAuth
+            user.setDiscordVerified(false);
+            user.setDiscordUserId(null);
         }
 
-        if (request.getMinecraftNickname() != null && !request.getMinecraftNickname().equals(user.getMinecraftNickname())) {
+        if (request.getMinecraftNickname() != null
+                && !request.getMinecraftNickname().equals(user.getMinecraftNickname())) {
             if (userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
                 throw new IllegalArgumentException("Minecraft никнейм уже используется");
             }
+            changes.add("Minecraft Nick: " + user.getMinecraftNickname() + " -> " + request.getMinecraftNickname());
             user.setMinecraftNickname(request.getMinecraftNickname());
         }
 
-        if (request.getAvatarUrl() != null) {
+        if (request.getAvatarUrl() != null && !request.getAvatarUrl().equals(user.getAvatarUrl())) {
+            changes.add("Avatar changed");
             user.setAvatarUrl(request.getAvatarUrl());
         }
 
-        if (request.getBio() != null) {
+        if (request.getBio() != null && !request.getBio().equals(user.getBio())) {
+            changes.add("Bio updated");
             user.setBio(request.getBio());
         }
 
@@ -113,15 +127,23 @@ public class UserService {
                 throw new IllegalArgumentException("Неверный старый пароль");
             }
             user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            changes.add("Password changed");
         }
 
         User updated = userRepository.save(user);
+
+        if (!changes.isEmpty()) {
+            auditLogService.logAction(user.getId(), user.getUsername(), "USER_UPDATE_PROFILE",
+                    "Обновил профиль: " + String.join(", ", changes), user.getId(), user.getUsername());
+        }
+
         return mapToResponse(updated);
     }
 
     @Transactional(readOnly = true)
     public List<UserResponse> getAllUsers() {
-        // Возвращаем только пользователей с подтвержденным email И принятой заявкой (isPlayer = true)
+        // Возвращаем только пользователей с подтвержденным email И принятой заявкой
+        // (isPlayer = true)
         return userRepository.findAll().stream()
                 .filter(User::isPlayer)
                 .map(this::mapToResponse)
@@ -137,7 +159,7 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse banUser(Long userId, String reason) {
+    public UserResponse banUser(Long userId, String reason, Long adminId, String adminName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
@@ -153,19 +175,32 @@ public class UserService {
 
         User updated = userRepository.save(user);
 
-        if (user.getDiscordUserId() != null && discordService.isEnabled()) {
+        SiteSettings settings = getSiteSettings();
+
+        if (settings.isSendDiscordDmOnBan() && user.getDiscordUserId() != null && discordService.isEnabled()) {
             discordService.removeSlRole(user.getDiscordUserId());
             discordService.sendDirectMessage(user.getDiscordUserId(),
                     "🚫 **StoryLegends** — Ваш аккаунт был **заблокирован** администрацией.\n" +
-                    "**Причина:** " + (reason != null ? reason : "Причина не указана") + "\n" +
-                    "***С уважением, <:slteam:1244336090928906351>***");
+                            "**Причина:** " + (reason != null ? reason : "Причина не указана") + "\n" +
+                            "**Модератор:** " + adminName + "\n" +
+                            "***С уважением, <:slteam:1244336090928906351>***");
+        } else if (!settings.isSendDiscordDmOnBan() && user.getDiscordUserId() != null && discordService.isEnabled()) {
+            // Still remove the role even if DM is disabled
+            discordService.removeSlRole(user.getDiscordUserId());
         }
+
+        if (settings.isSendEmailOnBan()) {
+            emailService.sendBanEmail(user.getEmail(), user.getUsername(), reason);
+        }
+
+        auditLogService.logAction(adminId, adminName, "ADMIN_BAN_USER", "Забанил пользователя. Причина: " + reason,
+                user.getId(), user.getUsername());
 
         return mapToResponse(updated);
     }
 
     @Transactional
-    public UserResponse unbanUser(Long userId) {
+    public UserResponse unbanUser(Long userId, Long adminId, String adminName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
@@ -185,9 +220,13 @@ public class UserService {
             discordService.assignSlRole(user.getDiscordUserId());
             discordService.sendDirectMessage(user.getDiscordUserId(),
                     "✅ **StoryLegends** — Ваш аккаунт был **разблокирован** администрацией.\n" +
-                    "Добро пожаловать обратно!\n" +
-                    "***С уважением, <:slteam:1244336090928906351>***");
+                            "**Модератор:** " + adminName + "\n" +
+                            "Добро пожаловать обратно!\n" +
+                            "***С уважением, <:slteam:1244336090928906351>***");
         }
+
+        auditLogService.logAction(adminId, adminName, "ADMIN_UNBAN_USER", "Разбанил пользователя", user.getId(),
+                user.getUsername());
 
         return mapToResponse(updated);
     }
@@ -195,7 +234,7 @@ public class UserService {
     // Admin methods
 
     @Transactional
-    public String resetUserPassword(Long userId) {
+    public void resetUserPassword(Long userId, Long adminId, String adminName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
@@ -206,18 +245,22 @@ public class UserService {
         // Отправляем email с новым паролем
         emailService.sendPasswordResetEmail(user.getEmail(), user.getUsername(), newPassword);
 
-        return newPassword;
+        auditLogService.logAction(adminId, adminName, "ADMIN_RESET_PASSWORD", "Сброшен пароль пользователя",
+                user.getId(), user.getUsername());
     }
 
     @Transactional
-    public UserResponse adminUpdateUser(Long userId, AdminUpdateUserRequest request) {
+    public UserResponse adminUpdateUser(Long userId, AdminUpdateUserRequest request, Long adminId, String adminName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
+
+        java.util.List<String> changes = new java.util.ArrayList<>();
 
         if (request.getUsername() != null && !request.getUsername().equals(user.getUsername())) {
             if (userRepository.existsByUsername(request.getUsername())) {
                 throw new IllegalArgumentException("Имя пользователя уже занято");
             }
+            changes.add("Username: " + user.getUsername() + " -> " + request.getUsername());
             user.setUsername(request.getUsername());
         }
 
@@ -225,6 +268,7 @@ public class UserService {
             if (userRepository.existsByEmail(request.getEmail())) {
                 throw new IllegalArgumentException("Email уже используется");
             }
+            changes.add("Email: " + user.getEmail() + " -> " + request.getEmail());
             user.setEmail(request.getEmail());
             // Reset email verification — user must confirm new email
             user.setEmailVerified(false);
@@ -238,68 +282,101 @@ public class UserService {
             if (userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
                 throw new IllegalArgumentException("Discord никнейм уже используется");
             }
+            changes.add("Discord Nick: " + user.getDiscordNickname() + " -> " + request.getDiscordNickname());
             user.setDiscordNickname(request.getDiscordNickname());
         }
 
-        if (request.getMinecraftNickname() != null && !request.getMinecraftNickname().equals(user.getMinecraftNickname())) {
+        if (request.getMinecraftNickname() != null
+                && !request.getMinecraftNickname().equals(user.getMinecraftNickname())) {
             if (userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
                 throw new IllegalArgumentException("Minecraft никнейм уже используется");
             }
+            changes.add("Minecraft Nick: " + user.getMinecraftNickname() + " -> " + request.getMinecraftNickname());
             user.setMinecraftNickname(request.getMinecraftNickname());
         }
 
-        if (request.getBio() != null) {
+        if (request.getBio() != null && !request.getBio().equals(user.getBio())) {
+            changes.add("Bio updated");
             user.setBio(request.getBio());
+        }
+
+        if (request.getRole() != null) {
+            try {
+                UserRole newRole = UserRole.valueOf(request.getRole());
+                if (newRole != user.getRole()) {
+                    changes.add("Role: " + user.getRole() + " -> " + newRole);
+                    user.setRole(newRole);
+                }
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Неверная роль");
+            }
         }
 
         if (request.getIsPlayer() != null) {
             boolean wasPlayer = user.isPlayer();
             boolean nowPlayer = request.getIsPlayer();
-            user.setPlayer(nowPlayer);
 
-            // Sync @SL Discord role
-            if (wasPlayer != nowPlayer && discordService.isEnabled()) {
-                // Resolve Discord user ID if not yet saved
-                if (user.getDiscordUserId() == null) {
-                    discordService.findDiscordUserId(user.getDiscordNickname())
-                            .ifPresent(id -> {
-                                user.setDiscordUserId(id);
-                            });
-                }
-                if (user.getDiscordUserId() != null) {
-                    if (nowPlayer) {
-                        discordService.assignSlRole(user.getDiscordUserId());
-                        discordService.sendDirectMessage(user.getDiscordUserId(),
-                                "**Приветствую!**\n" +
-                                        "Вам выдана роль @SL на сервере StoryLegends\n" +
-                                        "Добро пожаловать на наш сервер, дабы **начать играть** вам нужно **прочитать** канал <#1229044440178626660>.\n" +
-                                        "Так-же если вы ещё не ознакомилсь с [правилами](https://www.storylegends.xyz/rules) сервера, то обязательно это сделайте!\n" +
-                                        "**Удачной игры**\n" +
-                                        "***С уважением, <:slteam:1244336090928906351>***");
-                    } else {
-                        discordService.removeSlRole(user.getDiscordUserId());
-                        discordService.sendDirectMessage(user.getDiscordUserId(),
-                                "**StoryLegends** — Ваш статус игрока был отозван администрацией. Роль @SL удалена.\n" +
-                                        "**С уважением, <:slteam:1244336090928906351>**");
+            if (wasPlayer != nowPlayer) {
+                changes.add("IsPlayer: " + wasPlayer + " -> " + nowPlayer);
+                user.setPlayer(nowPlayer);
+
+                // Sync @SL Discord role
+                if (discordService.isEnabled()) {
+                    // Resolve Discord user ID if not yet saved
+                    if (user.getDiscordUserId() == null) {
+                        discordService.findDiscordUserId(user.getDiscordNickname())
+                                .ifPresent(id -> {
+                                    user.setDiscordUserId(id);
+                                });
+                    }
+                    if (user.getDiscordUserId() != null) {
+                        if (nowPlayer) {
+                            discordService.assignSlRole(user.getDiscordUserId());
+                            discordService.sendDirectMessage(user.getDiscordUserId(),
+                                    "**Приветствую!**\n" +
+                                            "Вам выдана роль @SL на сервере StoryLegends\n" +
+                                            "Добро пожаловать на наш сервер, дабы **начать играть** вам нужно **прочитать** канал <#1229044440178626660>.\n"
+                                            +
+                                            "Так-же если вы ещё не ознакомилсь с [правилами](https://www.storylegends.xyz/rules) сервера, то обязательно это сделайте!\n"
+                                            +
+                                            "**Модератор:** " + adminName + "\n" +
+                                            "***С уважением, <:slteam:1244336090928906351>***");
+                        } else {
+                            discordService.removeSlRole(user.getDiscordUserId());
+                            discordService.sendDirectMessage(user.getDiscordUserId(),
+                                    "**StoryLegends** — Ваш статус игрока был отозван администрацией. Роль @SL удалена.\n"
+                                            +
+                                            "**Модератор:** " + adminName + "\n" +
+                                            "**С уважением, <:slteam:1244336090928906351>**");
+                        }
                     }
                 }
             }
         }
 
         User updated = userRepository.save(user);
+
+        if (!changes.isEmpty()) {
+            auditLogService.logAction(adminId, adminName, "ADMIN_UPDATE_USER",
+                    "Админ обновил данные: " + String.join(", ", changes),
+                    user.getId(), user.getUsername());
+        }
+
         return mapToResponse(updated, true);
     }
 
     @Transactional
-    public void deleteUser(Long userId) {
+    public void deleteUser(Long userId, Long adminId, String adminName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
         userRepository.delete(user);
+        auditLogService.logAction(adminId, adminName, "ADMIN_DELETE_USER", "Админ удалил пользователя", user.getId(),
+                user.getUsername());
     }
 
     @Transactional
-    public UserResponse createUser(AdminCreateUserRequest request) {
+    public UserResponse createUser(AdminCreateUserRequest request, Long adminId, String adminName) {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new IllegalArgumentException("Имя пользователя уже занято");
         }
@@ -327,7 +404,9 @@ public class UserService {
         user.setEmailVerified(request.isEmailVerified());
 
         User saved = userRepository.save(user);
-        return mapToResponse(saved);
+        auditLogService.logAction(adminId, adminName, "ADMIN_CREATE_USER", "Админ создал нового пользователя",
+                saved.getId(), saved.getUsername());
+        return mapToResponse(saved, true);
     }
 
     @Transactional
@@ -349,7 +428,8 @@ public class UserService {
         User user = userRepository.findByResetPasswordToken(token)
                 .orElseThrow(() -> new IllegalArgumentException("Неверный или истекший токен восстановления"));
 
-        if (user.getResetPasswordTokenExpiry() == null || user.getResetPasswordTokenExpiry() < System.currentTimeMillis()) {
+        if (user.getResetPasswordTokenExpiry() == null
+                || user.getResetPasswordTokenExpiry() < System.currentTimeMillis()) {
             throw new IllegalArgumentException("Срок действия токена истек");
         }
 
@@ -375,14 +455,22 @@ public class UserService {
         return mapToResponse(user, false);
     }
 
+    public UserResponse getUserById(Long userId) {
+        return userRepository.findById(userId)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
+    }
+
     /**
      * Resolves an avatar URL or object key to a viewable URL.
-     * - Plain object key (e.g., "avatars/uuid.png") → generates presigned/public URL
+     * - Plain object key (e.g., "avatars/uuid.png") → generates presigned/public
+     * URL
      * - Old full S3/MinIO URL → extracts object key, then generates fresh URL
      * - External URL (Discord CDN etc.) → returned as-is
      */
     private String resolveAvatarUrl(String avatarUrl) {
-        if (avatarUrl == null || avatarUrl.isBlank()) return null;
+        if (avatarUrl == null || avatarUrl.isBlank())
+            return null;
         if (!avatarUrl.startsWith("http://") && !avatarUrl.startsWith("https://")) {
             // Stored as object key — generate fresh URL
             try {
@@ -391,7 +479,8 @@ public class UserService {
                 return avatarUrl;
             }
         }
-        // It's a full URL — try to extract object key and re-resolve (handles expired presigned URLs)
+        // It's a full URL — try to extract object key and re-resolve (handles expired
+        // presigned URLs)
         try {
             String objectKey = fileStorageService.extractObjectKey(avatarUrl);
             if (objectKey != null) {
@@ -419,6 +508,7 @@ public class UserService {
         response.setBio(user.getBio());
         response.setPlayer(user.isPlayer());
         response.setDiscordUserId(user.getDiscordUserId());
+        response.setDiscordVerified(user.isDiscordVerified());
 
         // Badges (no @SL role - that's internal Discord only)
         if (user.getBadges() != null) {
@@ -476,6 +566,12 @@ public class UserService {
             }
 
             userRepository.save(user);
+
+            // Log login action
+            auditLogService.logAction(user.getId(), user.getUsername(), "USER_LOGIN",
+                    String.format("Пользователь %s залогинился с IP %s, User-Agent: %s", user.getUsername(), geoIp,
+                            userAgent),
+                    null, null);
         });
     }
 }

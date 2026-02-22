@@ -23,6 +23,7 @@ public class UserResponse {
     @JsonProperty("isPlayer")
     private boolean isPlayer;
     private String discordUserId;
+    private boolean discordVerified;
 
     // Badges (without @SL role)
     private List<BadgeResponse> badges;

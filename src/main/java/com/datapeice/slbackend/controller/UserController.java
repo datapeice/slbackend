@@ -9,26 +9,30 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
     private final UserService userService;
+    private final com.datapeice.slbackend.service.AuditLogService auditLogService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, com.datapeice.slbackend.service.AuditLogService auditLogService) {
         this.userService = userService;
+        this.auditLogService = auditLogService;
     }
 
     @GetMapping("/me")
-    public ResponseEntity<UserResponse> getMyProfile(@AuthenticationPrincipal User user) {
+    public ResponseEntity<UserResponse> getMyProfile(@AuthenticationPrincipal User user, HttpServletRequest request) {
         return ResponseEntity.ok(userService.getUserProfile(user));
     }
 
     @PatchMapping("/me")
     public ResponseEntity<?> updateMyProfile(
             @AuthenticationPrincipal User user,
-            @Valid @RequestBody UpdateUserRequest request) {
+            @Valid @RequestBody UpdateUserRequest request,
+            HttpServletRequest requestObj) {
         try {
             UserResponse response = userService.updateUserProfile(user, request);
             return ResponseEntity.ok(response);
@@ -42,5 +46,3 @@ public class UserController {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 }
-
-

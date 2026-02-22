@@ -2,12 +2,14 @@ package com.datapeice.slbackend.service;
 
 import com.datapeice.slbackend.dto.ApplicationResponse;
 import com.datapeice.slbackend.dto.CreateApplicationRequest;
+import com.datapeice.slbackend.dto.MyApplicationsResponse;
 import com.datapeice.slbackend.dto.UpdateApplicationStatusRequest;
 import com.datapeice.slbackend.entity.Application;
 import com.datapeice.slbackend.entity.ApplicationStatus;
 import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.repository.ApplicationRepository;
 import com.datapeice.slbackend.repository.UserRepository;
+import com.datapeice.slbackend.entity.SiteSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,22 +30,41 @@ public class ApplicationService {
     private final EmailService emailService;
     private final DiscordService discordService;
 
-    public ApplicationService(ApplicationRepository applicationRepository, RecaptchaService recaptchaService, UserRepository userRepository, EmailService emailService, DiscordService discordService) {
+    private final SiteSettingsService siteSettingsService;
+    private final AuditLogService auditLogService;
+
+    public ApplicationService(ApplicationRepository applicationRepository, RecaptchaService recaptchaService,
+            UserRepository userRepository, EmailService emailService, DiscordService discordService,
+            SiteSettingsService siteSettingsService, AuditLogService auditLogService) {
         this.applicationRepository = applicationRepository;
         this.recaptchaService = recaptchaService;
         this.userRepository = userRepository;
         this.emailService = emailService;
         this.discordService = discordService;
+        this.siteSettingsService = siteSettingsService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
     public ApplicationResponse createApplication(User user, CreateApplicationRequest request) {
         logger.info("Application creation attempt by user: {}", user.getUsername());
 
+        // Проверяем не забанен ли пользователь
+        if (user.isBanned()) {
+            logger.warn("Banned user {} tried to create application", user.getUsername());
+            throw new IllegalStateException("Ваш аккаунт заблокирован. Вы не можете подавать заявки.");
+        }
+
         // Проверяем подтвержден ли email
         if (!user.isEmailVerified()) {
             logger.warn("User {} tried to create application without verifying email", user.getUsername());
             throw new IllegalStateException("Вы должны подтвердить свой email перед подачей заявки");
+        }
+
+        // Проверяем верифицирован ли Discord аккаунт
+        if (!user.isDiscordVerified()) {
+            logger.warn("User {} tried to create application without Discord verification", user.getUsername());
+            throw new IllegalStateException("Вы должны подтвердить свой Discord аккаунт перед подачей заявки");
         }
 
         // Проверяем reCAPTCHA
@@ -65,7 +86,9 @@ public class ApplicationService {
             boolean inGuild = discordService.isMemberInGuild(user.getDiscordNickname());
             if (!inGuild) {
                 logger.warn("User {} is not in Discord guild", user.getUsername());
-                throw new IllegalStateException("Вы должны быть участником нашего Discord сервера, чтобы подать заявку. Ник: " + user.getDiscordNickname());
+                throw new IllegalStateException(
+                        "Вы должны быть участником нашего Discord сервера, чтобы подать заявку. Ник: "
+                                + user.getDiscordNickname());
             }
             // Try to save Discord user ID for future notifications
             if (user.getDiscordUserId() == null) {
@@ -79,8 +102,7 @@ public class ApplicationService {
 
         // Проверяем, нет ли уже активной заявки
         List<Application> existingPending = applicationRepository.findAllByUserIdAndStatus(
-                user.getId(), ApplicationStatus.PENDING
-        );
+                user.getId(), ApplicationStatus.PENDING);
 
         if (!existingPending.isEmpty()) {
             throw new IllegalStateException("У вас уже есть активная заявка в статусе PENDING");
@@ -98,29 +120,35 @@ public class ApplicationService {
         application.setStatus(ApplicationStatus.PENDING);
 
         Application saved = applicationRepository.save(application);
+        auditLogService.logAction(user.getId(), user.getUsername(), "USER_SUBMIT_APPLICATION",
+                "Отправил заявку на сервер", null, null);
 
         // Notify user via Discord DM
         if (user.getDiscordUserId() != null) {
             discordService.sendDirectMessage(user.getDiscordUserId(),
                     "**StoryLegends** — Ваша заявка на вступление была успешно отправлена! " +
-                    "Мы рассмотрим её в ближайшее время.\n" + "***С уважением, <:slteam:1244336090928906351>***");
+                            "Мы рассмотрим её в ближайшее время.\n"
+                            + "***С уважением, <:slteam:1244336090928906351>***");
         }
+
+        // Notify admins
+        discordService.notifyAdminsAboutNewApplication(user.getUsername());
 
         return mapToResponse(saved);
     }
 
-    public List<ApplicationResponse> getMyApplication(User user) {
+    public MyApplicationsResponse getMyApplications(User user) {
         List<Application> applications = applicationRepository.findAllByUserId(user.getId());
 
-        if (applications.isEmpty()) {
-            return List.of();
-        }
-
-        // Возвращаем список заявок, отсортированный по дате создания (новые сверху)
-        return applications.stream()
+        List<ApplicationResponse> history = applications.stream()
                 .sorted((a1, a2) -> a2.getCreatedAt().compareTo(a1.getCreatedAt()))
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+
+        MyApplicationsResponse result = new MyApplicationsResponse();
+        result.setHistory(history);
+        result.setCurrent(history.isEmpty() ? null : history.getFirst());
+        return result;
     }
 
     public List<ApplicationResponse> getAllApplications() {
@@ -136,12 +164,15 @@ public class ApplicationService {
     }
 
     @Transactional
-    public ApplicationResponse updateApplicationStatus(Long applicationId, UpdateApplicationStatusRequest request) {
+    public ApplicationResponse updateApplicationStatus(Long applicationId, UpdateApplicationStatusRequest request,
+            Long adminId, String adminName) {
         Application application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена"));
 
         application.setStatus(request.getStatus());
         application.setAdminComment(request.getAdminComment());
+
+        SiteSettings settings = siteSettingsService.getSettings();
 
         if (request.getStatus() == ApplicationStatus.ACCEPTED) {
             User user = application.getUser();
@@ -154,32 +185,49 @@ public class ApplicationService {
                         .ifPresent(user::setDiscordUserId);
             }
             userRepository.save(user);
-            emailService.sendApplicationAcceptedEmail(user.getEmail(), user.getUsername(), user.getDiscordNickname());
+
+            if (settings.isSendEmailOnApplicationApproved()) {
+                emailService.sendApplicationAcceptedEmail(user.getEmail(), user.getUsername(),
+                        user.getDiscordNickname());
+            }
+
             // Send DM only — @SL role is managed ONLY via isPlayer in admin panel
             if (user.getDiscordUserId() != null) {
                 discordService.sendDirectMessage(user.getDiscordUserId(),
                         "**Приветствую!**\n" +
                                 "Ваша заявка на вступление на сервер **StoryLegends** была принята!\n" +
                                 "Комментарий от администрации: *" + reason + "*\n" +
-                                "Добро пожаловать на наш сервер, дабы **начать играть** вам нужно **прочитать** канал <#1229044440178626660>.\n" +
-                                "Так-же если вы ещё не ознакомилсь с [правилами](https://www.storylegends.xyz/rules) сервера, то обязательно это сделайте!\n" +
+                                "Добро пожаловать на наш сервер, дабы **начать играть** вам нужно **прочитать** канал <#1229044440178626660>.\n"
+                                +
+                                "Так-же если вы ещё не ознакомилсь с [правилами](https://www.storylegends.xyz/rules) сервера, то обязательно это сделайте!\n"
+                                +
                                 "**Удачной игры**\n" +
                                 "***С уважением, <:slteam:1244336090928906351>***");
             }
         } else if (request.getStatus() == ApplicationStatus.REJECTED) {
             User user = application.getUser();
-            emailService.sendApplicationRejectedEmail(user.getEmail(), user.getUsername(), request.getAdminComment());
+
+            if (settings.isSendEmailOnApplicationRejected()) {
+                emailService.sendApplicationRejectedEmail(user.getEmail(), user.getUsername(),
+                        request.getAdminComment());
+            }
+
             // Send rejection DM
             if (user.getDiscordUserId() != null) {
                 String reason = request.getAdminComment() != null ? request.getAdminComment() : "Причина не указана";
                 discordService.sendDirectMessage(user.getDiscordUserId(),
                         "**Приветствую!**\n" +
-                                "Ваша заявка на вступление на сервер **StoryLegends** к сожелению было **отклонена**!\n" +
-                                "Комментарий от администрации: *" + reason + "* \n***С уважением, <:slteam:1244336090928906351>***");
+                                "Ваша заявка на вступление на сервер **StoryLegends** к сожелению было **отклонена**!\n"
+                                +
+                                "Комментарий от администрации: *" + reason
+                                + "* \n***С уважением, <:slteam:1244336090928906351>***");
             }
         }
 
         Application updated = applicationRepository.save(application);
+        auditLogService.logAction(adminId, adminName, "ADMIN_UPDATE_APPLICATION",
+                "Изменил статус заявки на " + request.getStatus() + ". Комментарий: " + request.getAdminComment(),
+                application.getUser().getId(), application.getUser().getUsername());
         return mapToResponse(updated);
     }
 

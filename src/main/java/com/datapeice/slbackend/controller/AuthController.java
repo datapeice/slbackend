@@ -9,12 +9,16 @@ import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.entity.UserRole;
 import com.datapeice.slbackend.repository.UserRepository;
 import com.datapeice.slbackend.security.JwtCore;
+import com.datapeice.slbackend.service.DiscordOAuthService;
+import com.datapeice.slbackend.service.DiscordOAuthService.DiscordUserInfo;
+import com.datapeice.slbackend.service.DiscordService;
 import com.datapeice.slbackend.service.EmailService;
 import com.datapeice.slbackend.service.GeoIpService;
 import com.datapeice.slbackend.service.RecaptchaService;
 import com.datapeice.slbackend.service.RateLimitService;
 import com.datapeice.slbackend.service.TotpService;
 import com.datapeice.slbackend.service.UserService;
+import com.datapeice.slbackend.service.SiteSettingsService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -24,6 +28,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -47,9 +52,16 @@ public class AuthController {
     private final TotpService totpService;
     private final UserService userService;
     private final GeoIpService geoIpService;
+    private final DiscordOAuthService discordOAuthService;
+    private final DiscordService discordService;
+    private final SiteSettingsService siteSettingsService;
+    private final com.datapeice.slbackend.service.AuditLogService auditLogService;
 
     @Value("${email.verification.expiration}")
     private long emailVerificationExpiration;
+
+    @Value("${frontend.url:http://localhost:5173}")
+    private String frontendUrl;
 
     @Value("${app.recaptcha.enabled:true}")
     private boolean recaptchaEnabled;
@@ -61,15 +73,19 @@ public class AuthController {
     private boolean autoVerifyEmail;
 
     public AuthController(AuthenticationManager authenticationManager,
-                         UserRepository userRepository,
-                         BCryptPasswordEncoder bCryptPasswordEncoder,
-                         JwtCore jwtCore,
-                         EmailService emailService,
-                         RecaptchaService recaptchaService,
-                         RateLimitService rateLimitService,
-                         TotpService totpService,
-                         UserService userService,
-                         GeoIpService geoIpService) {
+            UserRepository userRepository,
+            BCryptPasswordEncoder bCryptPasswordEncoder,
+            JwtCore jwtCore,
+            EmailService emailService,
+            RecaptchaService recaptchaService,
+            RateLimitService rateLimitService,
+            TotpService totpService,
+            UserService userService,
+            GeoIpService geoIpService,
+            DiscordOAuthService discordOAuthService,
+            DiscordService discordService,
+            SiteSettingsService siteSettingsService,
+            com.datapeice.slbackend.service.AuditLogService auditLogService) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
@@ -80,12 +96,21 @@ public class AuthController {
         this.totpService = totpService;
         this.userService = userService;
         this.geoIpService = geoIpService;
+        this.discordOAuthService = discordOAuthService;
+        this.discordService = discordService;
+        this.siteSettingsService = siteSettingsService;
+        this.auditLogService = auditLogService;
     }
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody SignUpBody body, HttpServletRequest request) {
         String ipAddress = getClientIP(request);
         String userAgent = request.getHeader("User-Agent");
+
+        // Check if registration is open
+        if (!siteSettingsService.getSettings().isRegistrationOpen()) {
+            return ResponseEntity.status(403).body(Map.of("error", "Регистрация временно закрыта"));
+        }
 
         // Проверка User-Agent
         if (userAgent == null || userAgent.isBlank() || userAgent.length() < 10) {
@@ -103,17 +128,15 @@ public class AuthController {
             if (token == null || token.isBlank()) {
                 logger.warn("reCAPTCHA token is missing. Request from IP: {}", ipAddress);
                 return ResponseEntity.badRequest().body(Map.of(
-                    "error", "reCAPTCHA token обязателен",
-                    "hint", "Frontend должен получить токен через grecaptcha.execute()"
-                ));
+                        "error", "reCAPTCHA token обязателен",
+                        "hint", "Frontend должен получить токен через grecaptcha.execute()"));
             }
 
             if (!recaptchaService.verifyRecaptcha(token, "register")) {
                 logger.warn("reCAPTCHA verification failed for IP: {}", ipAddress);
                 return ResponseEntity.badRequest().body(Map.of(
-                    "error", "reCAPTCHA проверка не пройдена",
-                    "hint", "Возможно, вы робот или токен истек"
-                ));
+                        "error", "reCAPTCHA проверка не пройдена",
+                        "hint", "Возможно, вы робот или токен истек"));
             }
         }
 
@@ -147,7 +170,8 @@ public class AuthController {
         user.setRole(UserRole.ROLE_USER);
         // Security logging
         user.setRegistrationIp(geoIpService.formatIpWithGeo(ipAddress));
-        user.setRegistrationUserAgent(userAgent != null && userAgent.length() > 255 ? userAgent.substring(0, 255) : userAgent);
+        user.setRegistrationUserAgent(
+                userAgent != null && userAgent.length() > 255 ? userAgent.substring(0, 255) : userAgent);
 
         // В dev режиме автоматически верифицируем email
         if (autoVerifyEmail) {
@@ -160,6 +184,8 @@ public class AuthController {
             user.setEmailVerificationTokenExpiry(System.currentTimeMillis() + emailVerificationExpiration);
 
             userRepository.save(user);
+            auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER", "Зарегистрировался на сервере",
+                    null, null);
 
             // Отправляем письмо подтверждения
             if (emailEnabled) {
@@ -173,23 +199,21 @@ public class AuthController {
 
             return ResponseEntity.ok(Map.of(
                     "status", "success",
-                    "message", "Регистрация успешна! Проверьте ваш email для подтверждения аккаунта."
-            ));
+                    "message", "Регистрация успешна! Проверьте ваш email для подтверждения аккаунта."));
         }
 
         // Если auto-verify включен, сразу логиним пользователя
         userRepository.save(user);
+        auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER", "Зарегистрировался", null, null);
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
-                user, null, user.getAuthorities()
-        );
+                user, null, user.getAuthorities());
         String jwtToken = jwtCore.generateToken(authentication);
 
         return ResponseEntity.ok(Map.of(
                 "status", "success",
                 "message", "Регистрация успешна!",
-                "token", jwtToken
-        ));
+                "token", jwtToken));
     }
 
     @PostMapping("/verify-email")
@@ -205,14 +229,13 @@ public class AuthController {
             // Проверяем, может быть email уже подтвержден (токен был использован ранее)
             // Это нормальная ситуация при повторных запросах от frontend
             return ResponseEntity.badRequest().body(Map.of(
-                "error", "Неверный токен подтверждения",
-                "code", "INVALID_TOKEN",
-                "hint", "Возможно, email уже подтвержден. Попробуйте войти."
-            ));
+                    "error", "Неверный токен подтверждения",
+                    "code", "INVALID_TOKEN",
+                    "hint", "Возможно, email уже подтвержден. Попробуйте войти."));
         }
 
         logger.info("User found for token: {}, expiry: {}, current time: {}",
-            user.getUsername(), user.getEmailVerificationTokenExpiry(), System.currentTimeMillis());
+                user.getUsername(), user.getEmailVerificationTokenExpiry(), System.currentTimeMillis());
 
         // Проверяем, не подтвержден ли уже email
         if (user.isEmailVerified()) {
@@ -220,25 +243,22 @@ public class AuthController {
 
             // Возвращаем успех, генерируем новый токен
             Authentication authentication = new UsernamePasswordAuthenticationToken(
-                    user, null, user.getAuthorities()
-            );
+                    user, null, user.getAuthorities());
             String jwtToken = jwtCore.generateToken(authentication);
 
             return ResponseEntity.ok(Map.of(
                     "status", "success",
                     "message", "Email уже подтвержден",
                     "token", jwtToken,
-                    "alreadyVerified", true
-            ));
+                    "alreadyVerified", true));
         }
 
         if (user.getEmailVerificationTokenExpiry() < System.currentTimeMillis()) {
             logger.warn("Token expired for user: {}", user.getUsername());
             return ResponseEntity.badRequest().body(Map.of(
-                "error", "Токен подтверждения истек",
-                "code", "TOKEN_EXPIRED",
-                "hint", "Запросите новое письмо подтверждения"
-            ));
+                    "error", "Токен подтверждения истек",
+                    "code", "TOKEN_EXPIRED",
+                    "hint", "Запросите новое письмо подтверждения"));
         }
 
         user.setEmailVerified(true);
@@ -250,16 +270,14 @@ public class AuthController {
 
         // Автоматический вход после подтверждения
         Authentication authentication = new UsernamePasswordAuthenticationToken(
-                user, null, user.getAuthorities()
-        );
+                user, null, user.getAuthorities());
         String jwtToken = jwtCore.generateToken(authentication);
 
         return ResponseEntity.ok(Map.of(
                 "status", "success",
                 "message", "Email подтвержден успешно!",
                 "token", jwtToken,
-                "alreadyVerified", false
-        ));
+                "alreadyVerified", false));
     }
 
     @PostMapping("/login")
@@ -287,8 +305,7 @@ public class AuthController {
                 if (body.getTotpCode() == null || body.getTotpCode().isBlank()) {
                     return ResponseEntity.badRequest().body(Map.of(
                             "error", "TOTP code required",
-                            "totpRequired", true
-                    ));
+                            "totpRequired", true));
                 }
 
                 if (!totpService.verifyCode(user.getTotpSecret(), body.getTotpCode())) {
@@ -298,13 +315,13 @@ public class AuthController {
 
             // Аутентификация (даже для неподтвержденных пользователей)
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(body.getUsername(), body.getPassword())
-            );
+                    new UsernamePasswordAuthenticationToken(body.getUsername(), body.getPassword()));
             SecurityContextHolder.getContext().setAuthentication(authentication);
             String jwtToken = jwtCore.generateToken(authentication);
 
-            // Record login IP/UA for security logging
-            final String finalUa = userAgent != null && userAgent.length() > 255 ? userAgent.substring(0, 255) : userAgent;
+            // Record login IP/UA for security logging (includes audit log)
+            final String finalUa = userAgent != null && userAgent.length() > 255 ? userAgent.substring(0, 255)
+                    : userAgent;
             userService.recordLogin(user.getUsername(), ipAddress, finalUa);
 
             // Возвращаем токен + статус верификации
@@ -313,16 +330,19 @@ public class AuthController {
                     "token", jwtToken,
                     "emailVerified", user.isEmailVerified(),
                     "username", user.getUsername(),
-                    "isPlayer", user.isPlayer()
-            ));
+                    "isPlayer", user.isPlayer()));
         } catch (Exception e) {
             logger.error("Authentication failed for user: {}", body.getUsername(), e);
+            auditLogService.logAction(null, body.getUsername(), "USER_LOGIN_FAIL",
+                    String.format("Неудачная попытка входа под IP %s, User-Agent: %s", ipAddress, userAgent),
+                    null, null);
             return ResponseEntity.badRequest().body(Map.of("error", "Неверное имя пользователя или пароль"));
         }
     }
 
     @PostMapping("/resend-verification")
-    public ResponseEntity<?> resendVerification(@RequestBody Map<String, String> request, HttpServletRequest httpRequest) {
+    public ResponseEntity<?> resendVerification(@RequestBody Map<String, String> request,
+            HttpServletRequest httpRequest) {
         String email = request.get("email");
         String ipAddress = getClientIP(httpRequest);
 
@@ -342,8 +362,7 @@ public class AuthController {
             // Не раскрываем, существует ли email
             return ResponseEntity.ok(Map.of(
                     "status", "success",
-                    "message", "Если email существует, письмо будет отправлено."
-            ));
+                    "message", "Если email существует, письмо будет отправлено."));
         }
 
         if (user.isEmailVerified()) {
@@ -367,15 +386,15 @@ public class AuthController {
 
         return ResponseEntity.ok(Map.of(
                 "status", "success",
-                "message", "Письмо подтверждения отправлено на ваш email"
-        ));
+                "message", "Письмо подтверждения отправлено на ваш email"));
     }
 
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         userService.processForgotPassword(request.getEmail());
         // Always return OK to avoid user enumeration
-        return ResponseEntity.ok(Map.of("message", "Если аккаунт с таким email существует, письмо для сброса пароля отправлено."));
+        return ResponseEntity
+                .ok(Map.of("message", "Если аккаунт с таким email существует, письмо для сброса пароля отправлено."));
     }
 
     @PostMapping("/reset-password")
@@ -387,6 +406,237 @@ public class AuthController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /**
+     * GET /api/auth/discord/authorize
+     * Returns the Discord OAuth2 authorization URL for the current authenticated
+     * user.
+     * The user's JWT is Base64-encoded and passed as the OAuth2 state parameter
+     * so we can identify the user in the callback.
+     */
+    @GetMapping("/discord/authorize")
+    public ResponseEntity<?> getDiscordAuthorizeUrl(@AuthenticationPrincipal User currentUser) {
+        String jwtToken = jwtCore.generateToken(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        currentUser, null, currentUser.getAuthorities()));
+        String state = java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(jwtToken.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        String authUrl = discordOAuthService.buildAuthorizationUrl(state);
+        return ResponseEntity.ok(Map.of("url", authUrl));
+    }
+
+    /**
+     * GET /api/auth/discord/callback
+     * Discord redirects here after user authorizes.
+     * Exchanges the code, links Discord to the user identified by the state param
+     * (JWT),
+     * then redirects the browser to the frontend.
+     */
+    @GetMapping("/discord/callback")
+    public jakarta.servlet.http.HttpServletResponse discordCallback(
+            @RequestParam(required = false) String code,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String error,
+            jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+
+        if (error != null || code == null || state == null) {
+            response.sendRedirect(frontendUrl + "/profile?discord=error&reason=" +
+                    (error != null ? error : "missing_params"));
+            return response;
+        }
+
+        String redirectBase = frontendUrl + "/profile?discord=";
+
+        try {
+            // Decode JWT from state
+            String jwt = new String(
+                    java.util.Base64.getUrlDecoder().decode(state),
+                    java.nio.charset.StandardCharsets.UTF_8);
+
+            if (!jwtCore.validateToken(jwt)) {
+                response.sendRedirect(redirectBase + "error&reason=invalid_state");
+                return response;
+            }
+
+            String username = jwtCore.getUsernameFromToken(jwt);
+            User user = userRepository.findByUsername(username)
+                    .orElse(null);
+            if (user == null) {
+                response.sendRedirect(redirectBase + "error&reason=user_not_found");
+                return response;
+            }
+
+            if (user.isDiscordVerified()) {
+                response.sendRedirect(redirectBase + "already_connected");
+                return response;
+            }
+
+            // Exchange code for access token
+            String accessToken = discordOAuthService.exchangeCodeForToken(code);
+            if (accessToken == null) {
+                response.sendRedirect(redirectBase + "error&reason=token_exchange_failed");
+                return response;
+            }
+
+            // Fetch Discord user info
+            DiscordUserInfo discordUser = discordOAuthService.fetchUserInfo(accessToken);
+            if (discordUser == null) {
+                response.sendRedirect(redirectBase + "error&reason=user_info_failed");
+                return response;
+            }
+
+            // Check if this Discord account is already linked to another user
+            boolean alreadyLinked = userRepository.findByDiscordUserId(discordUser.id())
+                    .map(existing -> !existing.getId().equals(user.getId()))
+                    .orElse(false);
+            if (alreadyLinked) {
+                response.sendRedirect(redirectBase + "error&reason=discord_already_linked");
+                return response;
+            }
+
+            // If user already has a discord nickname set, verify it matches the OAuth
+            // account
+            String existingNick = user.getDiscordNickname();
+            if (existingNick != null && !existingNick.isBlank()) {
+                if (!existingNick.equalsIgnoreCase(discordUser.displayName())
+                        && !existingNick.equalsIgnoreCase(discordUser.username())) {
+                    response.sendRedirect(redirectBase + "error&reason=discord_nickname_mismatch&expected=" +
+                            java.net.URLEncoder.encode(existingNick, java.nio.charset.StandardCharsets.UTF_8) +
+                            "&got=" +
+                            java.net.URLEncoder.encode(discordUser.displayName(),
+                                    java.nio.charset.StandardCharsets.UTF_8));
+                    return response;
+                }
+            }
+
+            // Update user
+            user.setDiscordUserId(discordUser.id());
+            user.setDiscordNickname(discordUser.displayName());
+            user.setDiscordVerified(true);
+
+            // Sync avatar from Discord if no avatar set
+            if (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) {
+                String avatarUrl = discordService.syncDiscordAvatar(discordUser.id());
+                if (avatarUrl != null) {
+                    user.setAvatarUrl(avatarUrl);
+                }
+            }
+
+            userRepository.save(user);
+
+            logger.info("Discord account connected via OAuth callback for user {} -> discordId={}, nick={}",
+                    user.getUsername(), discordUser.id(), discordUser.displayName());
+
+            response.sendRedirect(redirectBase + "success&discordName=" +
+                    java.net.URLEncoder.encode(discordUser.displayName(), java.nio.charset.StandardCharsets.UTF_8));
+
+        } catch (Exception ex) {
+            logger.error("Discord OAuth callback error: {}", ex.getMessage());
+            response.sendRedirect(redirectBase + "error&reason=server_error");
+        }
+        return response;
+    }
+
+    /**
+     * POST /api/auth/discord/connect
+     * Authenticated users call this with the Discord OAuth2 authorization code.
+     * It exchanges the code for an access token, fetches the Discord user info,
+     * and marks the account as discordVerified.
+     *
+     * Body: { "code": "..." }
+     */
+    @PostMapping("/discord/connect")
+    public ResponseEntity<?> connectDiscord(
+            @AuthenticationPrincipal User currentUser,
+            @RequestBody Map<String, String> body) {
+
+        String code = body.get("code");
+        if (code == null || code.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Discord OAuth code is required"));
+        }
+
+        // Re-load user from DB
+        User user = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.isDiscordVerified()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Discord уже подтверждён"));
+        }
+
+        // Exchange code for access token
+        String accessToken = discordOAuthService.exchangeCodeForToken(code);
+        if (accessToken == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Не удалось получить токен Discord. Попробуйте снова."));
+        }
+
+        // Fetch Discord user info
+        DiscordUserInfo discordUser = discordOAuthService.fetchUserInfo(accessToken);
+        if (discordUser == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Не удалось получить информацию о пользователе Discord."));
+        }
+
+        // Check that this Discord account is not already linked to another site user
+        userRepository.findByDiscordUserId(discordUser.id()).ifPresent(existing -> {
+            if (!existing.getId().equals(user.getId())) {
+                throw new IllegalArgumentException("Этот Discord аккаунт уже привязан к другому пользователю.");
+            }
+        });
+
+        // If user already has a discord nickname set, verify it matches the OAuth
+        // account
+        String existingNick = user.getDiscordNickname();
+        if (existingNick != null && !existingNick.isBlank()) {
+            if (!existingNick.equalsIgnoreCase(discordUser.displayName())
+                    && !existingNick.equalsIgnoreCase(discordUser.username())) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "error", "Discord аккаунт не совпадает с указанным никнеймом. " +
+                                "Ожидается: " + existingNick + ", получен: " + discordUser.displayName()));
+            }
+        }
+
+        // Update user
+        user.setDiscordUserId(discordUser.id());
+        user.setDiscordNickname(discordUser.displayName());
+        user.setDiscordVerified(true);
+
+        // Sync avatar from Discord if no avatar set
+        if (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) {
+            String avatarUrl = discordService.syncDiscordAvatar(discordUser.id());
+            if (avatarUrl != null) {
+                user.setAvatarUrl(avatarUrl);
+            }
+        }
+
+        userRepository.save(user);
+
+        logger.info("Discord account connected for user {} -> discordId={}, nick={}",
+                user.getUsername(), discordUser.id(), discordUser.displayName());
+
+        return ResponseEntity.ok(Map.of(
+                "status", "success",
+                "message", "Discord аккаунт успешно подтверждён!",
+                "discordUsername", discordUser.displayName(),
+                "discordId", discordUser.id()));
+    }
+
+    /**
+     * DELETE /api/auth/discord/disconnect
+     * Removes Discord link from the current user's account.
+     */
+    @DeleteMapping("/discord/disconnect")
+    public ResponseEntity<?> disconnectDiscord(@AuthenticationPrincipal User currentUser) {
+        User user = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setDiscordVerified(false);
+        user.setDiscordUserId(null);
+        userRepository.save(user);
+
+        return ResponseEntity.ok(Map.of("status", "success", "message", "Discord аккаунт отвязан."));
     }
 
     private String getClientIP(HttpServletRequest request) {
@@ -415,4 +665,3 @@ public class AuthController {
         return token.toString();
     }
 }
-
