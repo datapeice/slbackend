@@ -5,6 +5,7 @@ import com.datapeice.slbackend.dto.SignUpBody;
 import com.datapeice.slbackend.dto.VerifyEmailRequest;
 import com.datapeice.slbackend.dto.ForgotPasswordRequest;
 import com.datapeice.slbackend.dto.ResetPasswordRequest;
+import com.datapeice.slbackend.entity.SiteSettings;
 import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.entity.UserRole;
 import com.datapeice.slbackend.repository.UserRepository;
@@ -100,6 +101,14 @@ public class AuthController {
         this.discordService = discordService;
         this.siteSettingsService = siteSettingsService;
         this.auditLogService = auditLogService;
+    }
+
+    @GetMapping("/public/settings")
+    public ResponseEntity<?> getPublicSettings() {
+        SiteSettings settings = siteSettingsService.getSettings();
+        return ResponseEntity.ok(Map.of(
+                "registrationOpen", settings.isRegistrationOpen(),
+                "applicationsOpen", settings.isApplicationsOpen()));
     }
 
     @PostMapping("/register")
