@@ -62,6 +62,8 @@ public class DiscordService {
 
     private static final String MIMI_GIF_URL = "https://tenor.com/view/mimi-typh-heart-sit-mimi-the-dog-gif-13978401409055125823";
     private static final String DATAPEICE_IMAGE_URL = "https://i.imgur.com/5hbmB3v.png";
+    private static final String ROXY_GIF_URL = "https://tenor.com/bvLHN.gif";
+    private static final String ANGRY_PING = "<:angryping:1121035024179933204>";
 
     /**
      * JDA event listener that fires when a Discord user changes their username or
@@ -111,14 +113,22 @@ public class DiscordService {
         public void onMessageReceived(net.dv8tion.jda.api.events.message.MessageReceivedEvent event) {
             if (event.getAuthor().isBot()) return;
             String content = event.getMessage().getContentDisplay().toLowerCase();
-            // Пасхалка: mimi/мими
+            // mimi/мими пасхалка
             if (content.contains("mimi") || content.contains("мими")) {
                 event.getMessage().reply(MIMI_GIF_URL).queue();
                 return;
             }
-            // Пасхалка: @datapeice
+            // @datapeice пасхалка
             if (content.contains("@datapeice")) {
                 event.getMessage().reply(DATAPEICE_IMAGE_URL).queue();
+            }
+            // @lendspele_ или @L пасхалка
+            if (content.contains("@lendspele_") || content.contains("@l")) {
+                event.getMessage().reply(ANGRY_PING).queue();
+            }
+            // Roxy/Migurdia пасхалка
+            if (content.contains("рокси") || content.contains("migurdia") || content.contains("roxy") || content.contains("мигурдия")) {
+                event.getMessage().reply(ROXY_GIF_URL).queue();
             }
         }
     }

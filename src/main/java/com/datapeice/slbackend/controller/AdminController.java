@@ -67,6 +67,13 @@ public class AdminController {
         }
     }
 
+    @PostMapping("/reset-season")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> resetSeason(@AuthenticationPrincipal User admin) {
+        userService.resetAllUsersSeason(admin.getId(), admin.getUsername());
+        return ResponseEntity.ok().body("{\"message\": \"Сезон успешно сброшен, все игроки могут подать заявки.\"}");
+    }
+
     @GetMapping("/users")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsersForAdmin());

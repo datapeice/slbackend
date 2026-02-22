@@ -54,6 +54,14 @@ public class ApplicationService {
             throw new IllegalStateException("Ваш аккаунт заблокирован. Вы не можете подавать заявки.");
         }
 
+        // Проверяем не получал ли пользователь уже вердикт в текущем сезоне
+        if (user.isInSeason()) {
+            logger.warn("User {} already received a verdict in this season, cannot submit application",
+                    user.getUsername());
+            throw new IllegalStateException(
+                    "Вам уже вынесли вердикт в этом сезоне (приняты или отказаны). Подайте новую заявку в следующем сезоне.");
+        }
+
         // Проверяем подтвержден ли email
         if (!user.isEmailVerified()) {
             logger.warn("User {} tried to create application without verifying email", user.getUsername());
@@ -183,6 +191,7 @@ public class ApplicationService {
                 discordService.findDiscordUserId(user.getDiscordNickname())
                         .ifPresent(user::setDiscordUserId);
             }
+            user.setInSeason(true);
             userRepository.save(user);
 
             if (settings.isSendEmailOnApplicationApproved()) {
@@ -223,6 +232,8 @@ public class ApplicationService {
                                 "\n**Администратор:** " + adminName + "\n" +
                                 "***С уважением, <:slteam:1244336090928906351>***");
             }
+            user.setInSeason(true);
+            userRepository.save(user);
         }
 
         Application updated = applicationRepository.save(application);

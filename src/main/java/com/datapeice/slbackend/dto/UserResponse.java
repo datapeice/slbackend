@@ -22,6 +22,7 @@ public class UserResponse {
     private String bio;
     @JsonProperty("isPlayer")
     private boolean isPlayer;
+    private boolean inSeason;
     private String discordUserId;
     private boolean discordVerified;
 
@@ -36,5 +37,3 @@ public class UserResponse {
     private String lastLoginIp2;
     private String lastLoginUserAgent2;
 }
-
-

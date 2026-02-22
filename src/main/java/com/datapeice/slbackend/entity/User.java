@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Set;
 
 @Entity
-@Table(name="users")
+@Table(name = "users")
 @Data
 public class User implements UserDetails {
     @Id
@@ -40,6 +40,8 @@ public class User implements UserDetails {
     private String avatarUrl;
 
     private boolean banned = false;
+
+    private boolean inSeason = false;
 
     private String banReason;
 
@@ -84,11 +86,7 @@ public class User implements UserDetails {
 
     // Badges
     @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-        name = "user_badges",
-        joinColumns = @JoinColumn(name = "user_id"),
-        inverseJoinColumns = @JoinColumn(name = "badge_id")
-    )
+    @JoinTable(name = "user_badges", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "badge_id"))
     private Set<Badge> badges = new HashSet<>();
 
     @Override

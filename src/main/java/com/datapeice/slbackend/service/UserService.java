@@ -250,6 +250,13 @@ public class UserService {
     }
 
     @Transactional
+    public void resetAllUsersSeason(Long adminId, String adminName) {
+        userRepository.resetSeasonForAll();
+        auditLogService.logAction(adminId, adminName, "ADMIN_RESET_SEASON",
+                "Сброшен статус сезона. Все игроки могут снова подать заявки.", null, null);
+    }
+
+    @Transactional
     public UserResponse adminUpdateUser(Long userId, AdminUpdateUserRequest request, Long adminId, String adminName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
@@ -513,6 +520,7 @@ public class UserService {
         response.setTotpEnabled(user.isTotpEnabled());
         response.setBio(user.getBio());
         response.setPlayer(user.isPlayer());
+        response.setInSeason(user.isInSeason());
         response.setDiscordUserId(user.getDiscordUserId());
         response.setDiscordVerified(user.isDiscordVerified());
 
