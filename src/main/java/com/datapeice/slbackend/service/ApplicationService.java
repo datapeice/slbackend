@@ -111,7 +111,7 @@ public class ApplicationService {
         Application application = new Application();
         application.setUser(user);
         application.setFirstName(request.getFirstName());
-        application.setLastName(request.getLastName());
+        application.setAge(request.getAge());
         application.setWhyUs(request.getWhyUs());
         application.setSource(request.getSource());
         application.setMakeContent(request.isMakeContent());
@@ -235,7 +235,7 @@ public class ApplicationService {
         ApplicationResponse response = new ApplicationResponse();
         response.setId(application.getId());
         response.setFirstName(application.getFirstName());
-        response.setLastName(application.getLastName());
+        response.setAge(application.getAge());
         response.setWhyUs(application.getWhyUs());
         response.setSource(application.getSource());
         response.setMakeContent(application.isMakeContent());

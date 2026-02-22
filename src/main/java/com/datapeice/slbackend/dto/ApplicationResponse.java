@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 public class ApplicationResponse {
     private Long id;
     private String firstName;
-    private String lastName;
+    private Integer age;
     private String whyUs;
     private String source;
     private boolean makeContent;
@@ -29,4 +29,3 @@ public class ApplicationResponse {
         private String avatarUrl;
     }
 }
-

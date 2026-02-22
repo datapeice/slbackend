@@ -19,7 +19,7 @@ public class Application {
     private User user;
 
     private String firstName;
-    private String lastName;
+    private Integer age;
 
     @Column(columnDefinition = "TEXT")
     private String whyUs;

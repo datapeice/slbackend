@@ -11,9 +11,8 @@ public class CreateApplicationRequest {
     @Size(max = 50)
     private String firstName;
 
-    @NotBlank(message = "Фамилия не может быть пустой")
-    @Size(max = 50)
-    private String lastName;
+    @NotNull(message = "Возраст не может быть пустым")
+    private Integer age;
 
     @NotBlank(message = "Расскажите, почему хотите играть у нас")
     @Size(max = 2000)
