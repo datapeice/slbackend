@@ -535,6 +535,7 @@ public class AuthController {
             user.setDiscordUserId(discordUser.id());
             user.setDiscordNickname(discordUser.displayName());
             user.setDiscordVerified(true);
+            user.setInDiscord(discordService.checkMemberRest(discordUser.id()));
 
             // Sync avatar from Discord if no avatar set
             if (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) {
@@ -625,6 +626,7 @@ public class AuthController {
         user.setDiscordUserId(discordUser.id());
         user.setDiscordNickname(discordUser.displayName());
         user.setDiscordVerified(true);
+        user.setInDiscord(discordService.checkMemberRest(discordUser.id()));
 
         // Sync avatar from Discord if no avatar set
         if (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) {
@@ -657,6 +659,11 @@ public class AuthController {
     public ResponseEntity<?> disconnectDiscord(@AuthenticationPrincipal User currentUser) {
         User user = userRepository.findById(currentUser.getId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.isPlayer()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Действующим игрокам запрещено отвязывать Discord."));
+        }
 
         user.setDiscordVerified(false);
         user.setDiscordUserId(null);

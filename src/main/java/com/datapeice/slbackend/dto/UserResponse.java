@@ -25,6 +25,7 @@ public class UserResponse {
     private boolean inSeason;
     private String discordUserId;
     private boolean discordVerified;
+    private boolean inDiscordServer;
 
     // Badges (without @SL role)
     private List<BadgeResponse> badges;

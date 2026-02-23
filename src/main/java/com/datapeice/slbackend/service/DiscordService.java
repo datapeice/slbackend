@@ -29,6 +29,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class DiscordService {
@@ -54,16 +55,25 @@ public class DiscordService {
 
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
+    private final org.springframework.context.ApplicationContext applicationContext;
 
-    public DiscordService(FileStorageService fileStorageService, UserRepository userRepository) {
+    public DiscordService(FileStorageService fileStorageService, UserRepository userRepository,
+            org.springframework.context.ApplicationContext applicationContext) {
         this.fileStorageService = fileStorageService;
         this.userRepository = userRepository;
+        this.applicationContext = applicationContext;
     }
 
     private static final String MIMI_GIF_URL = "https://tenor.com/view/mimi-typh-heart-sit-mimi-the-dog-gif-13978401409055125823";
     private static final String DATAPEICE_IMAGE_URL = "https://i.imgur.com/5hbmB3v.png";
     private static final String ROXY_GIF_URL = "https://tenor.com/bvLHN.gif";
     private static final String ANGRY_PING = "<:angryping:1121035024179933204>";
+    private static final String MILKY_GIF_URL = "https://tenor.com/view/%D7%9E%D7%99%D7%9C%D7%A7%D7%99-%D7%99%D7%A9%D7%A8%D7%90%D7%9C-%D7%A0%D7%92%D7%91-%D7%A2%D7%91%D7%A8%D7%99%D7%AA-negev-gif-8641426212027285266";
+
+    private static final Set<String> MILKY_KEYWORDS = Set.of(
+        "Ответ Gemini", "Биби", "Нетаньяху", "Сионизм", "Сионист", "ЦАХАЛ", "Моссад", "Газа", "Хамас", "Палестина", "Палантир", "Оракл", "Апартеид", "Оккупация", "Хасбара", "Яхуд", "Интифада", "Накба", "Поселенцы", "Нимбус", "Железный купол",
+        "Bibi", "Netanyahu", "Zionism", "Zionist", "IDF", "Mossad", "Gaza", "Hamas", "Palestine", "Palantir", "Oracle", "Apartheid", "Occupation", "Hasbara", "Yahood", "Intifada", "Nakba", "Settlers", "Nimbus", "Iron Dome"
+    );
 
     /**
      * JDA event listener that fires when a Discord user changes their username or
@@ -106,12 +116,64 @@ public class DiscordService {
                 logger.error("Failed to sync Discord nickname for userId={}: {}", discordUserId, e.getMessage());
             }
         }
+
+        @Override
+        public void onUserUpdateAvatar(net.dv8tion.jda.api.events.user.update.UserUpdateAvatarEvent event) {
+            String discordUserId = event.getUser().getId();
+            try {
+                userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
+                    String newAvatarUrl = syncDiscordAvatar(discordUserId);
+                    if (newAvatarUrl != null) {
+                        user.setAvatarUrl(newAvatarUrl);
+                        userRepository.save(user);
+                        logger.info("Auto-synced Discord avatar for userId={}", discordUserId);
+                    }
+                });
+            } catch (Exception e) {
+                logger.error("Failed to sync Discord avatar for userId={}: {}", discordUserId, e.getMessage());
+            }
+        }
+
+        @Override
+        public void onGuildMemberUpdateNickname(
+                net.dv8tion.jda.api.events.guild.member.update.GuildMemberUpdateNicknameEvent event) {
+            if (event.getGuild().getId().equals(guildId)) {
+                String discordUserId = event.getUser().getId();
+                String newNickname = event.getNewNickname();
+                if (newNickname == null) {
+                    newNickname = event.getMember().getUser().getName(); // fallback
+                }
+                syncNickname(discordUserId, newNickname, "guild_nickname");
+            }
+        }
+
+        @Override
+        public void onGuildMemberUpdateAvatar(
+                net.dv8tion.jda.api.events.guild.member.update.GuildMemberUpdateAvatarEvent event) {
+            if (event.getGuild().getId().equals(guildId)) {
+                String discordUserId = event.getUser().getId();
+                try {
+                    userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
+                        String newAvatarUrl = syncDiscordAvatar(discordUserId);
+                        if (newAvatarUrl != null) {
+                            user.setAvatarUrl(newAvatarUrl);
+                            userRepository.save(user);
+                            logger.info("Auto-synced Discord guild avatar for userId={}", discordUserId);
+                        }
+                    });
+                } catch (Exception e) {
+                    logger.error("Failed to sync Discord guild avatar for userId={}: {}", discordUserId,
+                            e.getMessage());
+                }
+            }
+        }
     }
 
     private class MessageListener extends ListenerAdapter {
         @Override
         public void onMessageReceived(net.dv8tion.jda.api.events.message.MessageReceivedEvent event) {
-            if (event.getAuthor().isBot()) return;
+            if (event.getAuthor().isBot())
+                return;
             String content = event.getMessage().getContentDisplay().toLowerCase();
             // mimi/мими пасхалка
             if (content.contains("mimi") || content.contains("мими")) {
@@ -127,8 +189,69 @@ public class DiscordService {
                 event.getMessage().reply(ANGRY_PING).queue();
             }
             // Roxy/Migurdia пасхалка
-            if (content.contains("рокси") || content.contains("migurdia") || content.contains("roxy") || content.contains("мигурдия")) {
+            if (content.contains("рокси") || content.contains("migurdia") || content.contains("roxy")
+                    || content.contains("мигурдия")) {
                 event.getMessage().reply(ROXY_GIF_URL).queue();
+            }
+
+            for (String keyword : MILKY_KEYWORDS) {
+                if (content.contains(keyword.toLowerCase())) {
+                    event.getMessage().reply(MILKY_GIF_URL).queue();
+                    break;
+                }
+            }
+        }
+    }
+
+    private class MemberLeaveListener extends ListenerAdapter {
+        @Override
+        public void onGuildMemberRemove(net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent event) {
+            if (event.getGuild().getId().equals(guildId)) {
+                String discordUserId = event.getUser().getId();
+                try {
+                    userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
+                        // user.setDiscordVerified(false);
+                        // user.setDiscordUserId(null);
+                        user.setInDiscord(false);
+                        // Опционально: если вы хотите также убирать isPlayer:
+                        // user.setPlayer(false); нафиг надо, потому что человек может вернуться в
+                        // дискорд и он вернет статус игрока, а так с так был бы дополнительный геморой
+                        // админам
+                        userRepository.save(user);
+                        try {
+                            AuditLogService auditLogService = applicationContext.getBean(AuditLogService.class);
+                            auditLogService.logAction(user.getId(), user.getUsername(), "DISCORD_LEAVE",
+                                    "Покинул сервер Discord", user.getId(), user.getUsername());
+                        } catch (Exception auditEx) {
+                            logger.warn("Could not log DISCORD_LEAVE action", auditEx);
+                        }
+                        logger.info("Discord user {} left the guild. Updated inDiscord to false for user {}",
+                                discordUserId, user.getUsername());
+                    });
+                } catch (Exception e) {
+                    logger.error("Failed to handle guild member remove for discordUserId={}: {}", discordUserId,
+                            e.getMessage());
+                }
+            }
+        }
+    }
+
+    private class MemberJoinListener extends ListenerAdapter {
+        @Override
+        public void onGuildMemberJoin(net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent event) {
+            if (event.getGuild().getId().equals(guildId)) {
+                String discordUserId = event.getUser().getId();
+                try {
+                    userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
+                        user.setInDiscord(true);
+                        userRepository.save(user);
+                        logger.info("Discord user {} joined the guild. Updated inDiscord to true for user {}",
+                                discordUserId, user.getUsername());
+                    });
+                } catch (Exception e) {
+                    logger.error("Failed to handle guild member join for discordUserId={}: {}", discordUserId,
+                            e.getMessage());
+                }
             }
         }
     }
@@ -147,8 +270,11 @@ public class DiscordService {
                             GatewayIntent.DIRECT_MESSAGES,
                             GatewayIntent.MESSAGE_CONTENT)
                     .setMemberCachePolicy(MemberCachePolicy.ALL)
+                    .setChunkingFilter(net.dv8tion.jda.api.utils.ChunkingFilter.ALL)
                     .addEventListeners(new NicknameListener())
                     .addEventListeners(new MessageListener())
+                    .addEventListeners(new MemberJoinListener())
+                    .addEventListeners(new MemberLeaveListener())
                     .build();
             jda.awaitReady();
             logger.info("Discord bot started successfully. Guilds: {}", jda.getGuilds().size());
@@ -206,6 +332,55 @@ public class DiscordService {
             // On error - allow the application to proceed
             return true;
         }
+    }
+
+    /**
+     * Check if a member is in the guild quickly using JDA cache or user ID.
+     */
+    public boolean isMemberInGuildCached(String discordUserId, String discordNickname) {
+        if (!isEnabled()) {
+            return false;
+        }
+        Guild guild = jda.getGuildById(guildId);
+        if (guild == null) {
+            return false;
+        }
+
+        if (discordUserId != null && !discordUserId.isBlank()) {
+            net.dv8tion.jda.api.entities.Member member = guild.getMemberById(discordUserId);
+            if (member != null)
+                return true;
+        }
+
+        if (discordNickname != null && !discordNickname.isBlank()) {
+            String searchName = discordNickname.toLowerCase().trim();
+            if (searchName.contains("#")) {
+                searchName = searchName.substring(0, searchName.indexOf("#"));
+            }
+            final String finalSearch = searchName;
+
+            return guild.getMemberCache().stream()
+                    .anyMatch(m -> m.getUser().getName().toLowerCase().equals(finalSearch) ||
+                            (m.getNickname() != null && m.getNickname().toLowerCase().equals(finalSearch)) ||
+                            (m.getUser().getGlobalName() != null
+                                    && m.getUser().getGlobalName().toLowerCase().equals(finalSearch)));
+        }
+        return false;
+    }
+
+    public boolean checkMemberRest(String discordUserId) {
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank())
+            return false;
+        try {
+            Guild guild = jda.getGuildById(guildId);
+            if (guild != null) {
+                net.dv8tion.jda.api.entities.Member member = guild.retrieveMemberById(discordUserId).complete();
+                return member != null;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        return false;
     }
 
     /**

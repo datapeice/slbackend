@@ -17,12 +17,15 @@ public class FileController {
         private final FileStorageService fileStorageService;
         private final UserService userService;
         private final com.datapeice.slbackend.service.AuditLogService auditLogService;
+        private final com.datapeice.slbackend.service.ModerationService moderationService;
 
         public FileController(FileStorageService fileStorageService, UserService userService,
-                        com.datapeice.slbackend.service.AuditLogService auditLogService) {
+                        com.datapeice.slbackend.service.AuditLogService auditLogService,
+                        com.datapeice.slbackend.service.ModerationService moderationService) {
                 this.fileStorageService = fileStorageService;
                 this.userService = userService;
                 this.auditLogService = auditLogService;
+                this.moderationService = moderationService;
         }
 
         @PostMapping("/upload/avatar")
@@ -35,11 +38,19 @@ public class FileController {
                         }
                         String objectKey = fileStorageService.uploadFile(file, "avatars");
 
+                        // Resolve to a viewable URL for the response (and moderation)
+                        String viewUrl = fileStorageService.resolveUrl(objectKey);
+
+                        // Moderation
+                        if (moderationService.isImageInappropriate(viewUrl)) {
+                                fileStorageService.deleteFile(objectKey);
+                                throw new IllegalArgumentException(
+                                                "Изображение было отклонено автоматической системой модерации. Пожалуйста, выберите другой аватар.");
+                        }
+
                         user.setAvatarUrl(objectKey);
                         userService.updateUserProfile(user, null);
 
-                        // Resolve to a viewable URL for the response
-                        String viewUrl = fileStorageService.resolveUrl(objectKey);
                         auditLogService.logAction(user.getId(), user.getUsername(), "USER_UPLOAD_AVATAR",
                                         "Загрузил аватар", user.getId(), user.getUsername());
                         return ResponseEntity.ok(Map.of(

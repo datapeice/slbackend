@@ -8,7 +8,6 @@ import com.datapeice.slbackend.dto.UserResponse;
 import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.entity.UserRole;
 import com.datapeice.slbackend.entity.SiteSettings;
-import com.datapeice.slbackend.repository.SiteSettingsRepository;
 import com.datapeice.slbackend.repository.UserRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,19 +27,26 @@ public class UserService {
     private final FileStorageService fileStorageService;
     private final SiteSettingsService siteSettingsService;
     private final AuditLogService auditLogService;
+    private final ModerationService moderationService;
 
-    public UserService(UserRepository userRepository, BCryptPasswordEncoder passwordEncoder,
-            EmailService emailService, DiscordService discordService, GeoIpService geoIpService,
-            FileStorageService fileStorageService, SiteSettingsService siteSettingsService,
-            AuditLogService auditLogService) {
+    public UserService(UserRepository userRepository,
+            AuditLogService auditLogService,
+            DiscordService discordService,
+            FileStorageService fileStorageService,
+            EmailService emailService,
+            SiteSettingsService siteSettingsService,
+            ModerationService moderationService,
+            GeoIpService geoIpService,
+            BCryptPasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.emailService = emailService;
-        this.discordService = discordService;
-        this.geoIpService = geoIpService;
-        this.fileStorageService = fileStorageService;
-        this.siteSettingsService = siteSettingsService;
         this.auditLogService = auditLogService;
+        this.discordService = discordService;
+        this.fileStorageService = fileStorageService;
+        this.emailService = emailService;
+        this.siteSettingsService = siteSettingsService;
+        this.moderationService = moderationService;
+        this.geoIpService = geoIpService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     private SiteSettings getSiteSettings() {
@@ -89,6 +95,9 @@ public class UserService {
         }
 
         if (request.getDiscordNickname() != null && !request.getDiscordNickname().equals(user.getDiscordNickname())) {
+            if (user.isPlayer()) {
+                throw new IllegalArgumentException("Игрокам запрещено изменять Discord никнейм");
+            }
             if (userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
                 throw new IllegalArgumentException("Discord никнейм уже используется");
             }
@@ -102,6 +111,9 @@ public class UserService {
 
         if (request.getMinecraftNickname() != null
                 && !request.getMinecraftNickname().equals(user.getMinecraftNickname())) {
+            if (user.isPlayer()) {
+                throw new IllegalArgumentException("Игрокам запрещено изменять Minecraft никнейм");
+            }
             if (userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
                 throw new IllegalArgumentException("Minecraft никнейм уже используется");
             }
@@ -115,6 +127,10 @@ public class UserService {
         }
 
         if (request.getBio() != null && !request.getBio().equals(user.getBio())) {
+            if (moderationService.isTextToxic(request.getBio())) {
+                throw new IllegalArgumentException(
+                        "Текст 'О себе' нарушает правила платформы (токсичность/недопустимый контент). Пожалуйста, напишите другой текст.");
+            }
             changes.add(String.format("Bio updated (%d characters)", request.getBio().length()));
             user.setBio(request.getBio());
         }
@@ -143,10 +159,11 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserResponse> getAllUsers() {
         // Возвращаем только пользователей с подтвержденным email И принятой заявкой
-        // (isPlayer = true)
+        // (isPlayer = true) И находящихся на сервере Discord
         return userRepository.findAll().stream()
                 .filter(User::isPlayer)
                 .map(this::mapToResponse)
+                .filter(UserResponse::isInDiscordServer)
                 .collect(Collectors.toList());
     }
 
@@ -332,9 +349,7 @@ public class UserService {
                     // Resolve Discord user ID if not yet saved
                     if (user.getDiscordUserId() == null) {
                         discordService.findDiscordUserId(user.getDiscordNickname())
-                                .ifPresent(id -> {
-                                    user.setDiscordUserId(id);
-                                });
+                                .ifPresent(user::setDiscordUserId);
                     }
                     if (user.getDiscordUserId() != null) {
                         if (nowPlayer) {
@@ -523,6 +538,9 @@ public class UserService {
         response.setInSeason(user.isInSeason());
         response.setDiscordUserId(user.getDiscordUserId());
         response.setDiscordVerified(user.isDiscordVerified());
+
+        response.setInDiscordServer(user.isInDiscord() ||
+                discordService.isMemberInGuildCached(user.getDiscordUserId(), user.getDiscordNickname()));
 
         // Badges (no @SL role - that's internal Discord only)
         if (user.getBadges() != null) {

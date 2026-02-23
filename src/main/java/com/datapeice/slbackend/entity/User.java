@@ -75,6 +75,9 @@ public class User implements UserDetails {
     // Discord OAuth verification - account is active only when discord is verified
     private boolean discordVerified = false;
 
+    // Is the user currently a member of the linked Discord server
+    private boolean inDiscord = false;
+
     // Security logging
     private String registrationIp;
     private String registrationUserAgent;
