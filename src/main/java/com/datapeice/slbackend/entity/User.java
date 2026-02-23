@@ -76,6 +76,7 @@ public class User implements UserDetails {
     private boolean discordVerified = false;
 
     // Is the user currently a member of the linked Discord server
+    @Column(columnDefinition = "boolean default false")
     private boolean inDiscord = false;
 
     // Security logging
