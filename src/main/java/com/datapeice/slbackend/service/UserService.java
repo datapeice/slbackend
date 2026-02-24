@@ -70,8 +70,14 @@ public class UserService {
             return;
         String url = discordService.syncDiscordAvatar(user.getDiscordUserId());
         if (url != null) {
-            user.setAvatarUrl(url);
-            userRepository.save(user);
+            String oldAvatar = user.getAvatarUrl();
+            if (url != null && !url.equals(oldAvatar)) {
+                if (oldAvatar != null && !oldAvatar.startsWith("http")) {
+                    fileStorageService.deleteFile(oldAvatar);
+                }
+                user.setAvatarUrl(url);
+                userRepository.save(user);
+            }
         }
     }
 
@@ -95,14 +101,15 @@ public class UserService {
         }
 
         if (request.getDiscordNickname() != null && !request.getDiscordNickname().equals(user.getDiscordNickname())) {
-            if (user.isPlayer()) {
+            if (user.isPlayer() && user.getDiscordNickname() != null) {
                 throw new IllegalArgumentException("Игрокам запрещено изменять Discord никнейм");
             }
-            if (userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
+            if (!request.getDiscordNickname().isBlank()
+                    && userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
                 throw new IllegalArgumentException("Discord никнейм уже используется");
             }
             changes.add("Discord Nick: " + user.getDiscordNickname() + " -> " + request.getDiscordNickname());
-            user.setDiscordNickname(request.getDiscordNickname());
+            user.setDiscordNickname(request.getDiscordNickname().isBlank() ? null : request.getDiscordNickname());
             // When discord nickname changes, reset verification - user must re-verify via
             // OAuth
             user.setDiscordVerified(false);
@@ -111,19 +118,15 @@ public class UserService {
 
         if (request.getMinecraftNickname() != null
                 && !request.getMinecraftNickname().equals(user.getMinecraftNickname())) {
-            if (user.isPlayer()) {
+            if (user.isPlayer() && user.getMinecraftNickname() != null) {
                 throw new IllegalArgumentException("Игрокам запрещено изменять Minecraft никнейм");
             }
-            if (userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
+            if (!request.getMinecraftNickname().isBlank()
+                    && userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
                 throw new IllegalArgumentException("Minecraft никнейм уже используется");
             }
             changes.add("Minecraft Nick: " + user.getMinecraftNickname() + " -> " + request.getMinecraftNickname());
-            user.setMinecraftNickname(request.getMinecraftNickname());
-        }
-
-        if (request.getAvatarUrl() != null && !request.getAvatarUrl().equals(user.getAvatarUrl())) {
-            changes.add("Avatar changed");
-            user.setAvatarUrl(request.getAvatarUrl());
+            user.setMinecraftNickname(request.getMinecraftNickname().isBlank() ? null : request.getMinecraftNickname());
         }
 
         if (request.getBio() != null && !request.getBio().equals(user.getBio())) {
@@ -317,6 +320,16 @@ public class UserService {
             }
             changes.add("Minecraft Nick: " + user.getMinecraftNickname() + " -> " + request.getMinecraftNickname());
             user.setMinecraftNickname(request.getMinecraftNickname());
+        }
+
+        if (Boolean.TRUE.equals(request.getUnlinkDiscord())) {
+            if (user.getDiscordUserId() != null && discordService.isEnabled()) {
+                discordService.removeSlRole(user.getDiscordUserId());
+            }
+            changes.add("Unlinked Discord (" + user.getDiscordNickname() + ")");
+            user.setDiscordNickname(null);
+            user.setDiscordUserId(null);
+            user.setDiscordVerified(false);
         }
 
         if (request.getBio() != null && !request.getBio().equals(user.getBio())) {

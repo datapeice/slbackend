@@ -6,6 +6,7 @@ import io.minio.MinioClient;
 import io.minio.SetBucketPolicyArgs;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -15,6 +16,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import java.net.URI;
 
 @Configuration
+@ConditionalOnProperty(name = "minio.enabled", havingValue = "true", matchIfMissing = true)
 public class MinioConfig {
 
     @Value("${minio.endpoint}")
@@ -50,15 +52,13 @@ public class MinioConfig {
             boolean exists = minioClient.bucketExists(
                     BucketExistsArgs.builder()
                             .bucket(bucketName)
-                            .build()
-            );
+                            .build());
 
             if (!exists) {
                 minioClient.makeBucket(
                         MakeBucketArgs.builder()
                                 .bucket(bucketName)
-                                .build()
-                );
+                                .build());
                 System.out.println("Created bucket: " + bucketName);
             } else {
                 System.out.println("Bucket already exists: " + bucketName);
@@ -67,31 +67,32 @@ public class MinioConfig {
             System.err.println("Warning: Could not verify/create bucket (may already exist): " + e.getMessage());
         }
 
-        // Try to apply public-read policy (will fail on Bucketeer due to BlockPublicPolicy — that's OK)
+        // Try to apply public-read policy (will fail on Bucketeer due to
+        // BlockPublicPolicy — that's OK)
         try {
             String policy = """
-                {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {"AWS": "*"},
-                            "Action": ["s3:GetObject"],
-                            "Resource": ["arn:aws:s3:::%s/*"]
-                        }
-                    ]
-                }
-                """.formatted(bucketName);
+                    {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Principal": {"AWS": "*"},
+                                "Action": ["s3:GetObject"],
+                                "Resource": ["arn:aws:s3:::%s/*"]
+                            }
+                        ]
+                    }
+                    """.formatted(bucketName);
 
             minioClient.setBucketPolicy(
                     SetBucketPolicyArgs.builder()
                             .bucket(bucketName)
                             .config(policy)
-                            .build()
-            );
+                            .build());
             System.out.println("Applied public-read bucket policy.");
         } catch (Exception e) {
-            System.err.println("Warning: Could not set bucket policy (will use presigned URLs instead): " + e.getMessage());
+            System.err.println(
+                    "Warning: Could not set bucket policy (will use presigned URLs instead): " + e.getMessage());
         }
 
         return minioClient;

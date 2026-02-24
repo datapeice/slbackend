@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.annotation.Autowired;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -31,8 +32,8 @@ public class FileStorageService {
     private final boolean isAwsS3;
 
     public FileStorageService(
-            MinioClient minioClient,
-            S3Presigner s3Presigner,
+            @Autowired(required = false) MinioClient minioClient,
+            @Autowired(required = false) S3Presigner s3Presigner,
             @Value("${minio.bucket-name}") String bucketName,
             @Value("${minio.endpoint}") String minioEndpoint,
             @Value("${minio.public-url:}") String minioPublicUrl,
@@ -44,13 +45,15 @@ public class FileStorageService {
         this.minioPublicUrl = (minioPublicUrl != null && !minioPublicUrl.isBlank()) ? minioPublicUrl : null;
         this.presignedUrlExpiryHours = presignedUrlExpiryHours;
         this.isAwsS3 = minioEndpoint != null && minioEndpoint.contains("amazonaws.com");
-        logger.info("FileStorageService initialized: endpoint={}, bucket={}, publicUrl={}, presignedExpiry={}h, isAwsS3={}",
+        logger.info(
+                "FileStorageService initialized: endpoint={}, bucket={}, publicUrl={}, presignedExpiry={}h, isAwsS3={}",
                 minioEndpoint, bucketName, this.minioPublicUrl, presignedUrlExpiryHours, this.isAwsS3);
     }
 
     /**
      * Builds a public URL for a stored object.
-     * If minio.public-url is set, uses it as base (virtual-hosted-style for AWS S3).
+     * If minio.public-url is set, uses it as base (virtual-hosted-style for AWS
+     * S3).
      * Otherwise falls back to path-style: endpoint/bucket/object.
      */
     private String buildPublicUrl(String filename) {
@@ -61,9 +64,14 @@ public class FileStorageService {
     }
 
     /**
-     * Загружает файл в MinIO и возвращает object key (presigned URL генерируется отдельно)
+     * Загружает файл в MinIO и возвращает object key (presigned URL генерируется
+     * отдельно)
      */
     public String uploadFile(MultipartFile file, String folder) {
+        if (minioClient == null) {
+            logger.warn("MinIO upload skipped because minio is disabled.");
+            return folder + "/disabled-" + UUID.randomUUID();
+        }
         try {
             if (file.isEmpty()) {
                 throw new IllegalArgumentException("Файл пустой");
@@ -92,8 +100,7 @@ public class FileStorageService {
                                 .object(filename)
                                 .stream(inputStream, file.getSize(), -1)
                                 .contentType(contentType)
-                                .build()
-                );
+                                .build());
             }
 
             logger.info("Uploaded file to S3/MinIO: bucket={}, key={}", bucketName, filename);
@@ -102,7 +109,8 @@ public class FileStorageService {
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
-            logger.error("Ошибка при загрузке файла в S3/MinIO: endpoint={}, bucket={}, error={}", minioEndpoint, bucketName, e.getMessage(), e);
+            logger.error("Ошибка при загрузке файла в S3/MinIO: endpoint={}, bucket={}, error={}", minioEndpoint,
+                    bucketName, e.getMessage(), e);
             throw new RuntimeException("Ошибка при загрузке файла: " + e.getMessage(), e);
         }
     }
@@ -114,12 +122,16 @@ public class FileStorageService {
      * Для локального MinIO — MinIO SDK presigner.
      */
     public String resolveUrl(String objectKey) {
+        if (minioClient == null) {
+            return objectKey;
+        }
         if (minioPublicUrl != null) {
             return buildPublicUrl(objectKey);
         }
 
         if (isAwsS3) {
-            // Use AWS SDK v2 presigner — generates proper virtual-hosted-style presigned URLs
+            // Use AWS SDK v2 presigner — generates proper virtual-hosted-style presigned
+            // URLs
             try {
                 GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                         .bucket(bucketName)
@@ -149,8 +161,7 @@ public class FileStorageService {
                             .bucket(bucketName)
                             .object(objectKey)
                             .expiry(presignedUrlExpiryHours, TimeUnit.HOURS)
-                            .build()
-            );
+                            .build());
             logger.debug("Generated MinIO presigned URL for {}: {}", objectKey, url);
             return url;
         } catch (Exception e) {
@@ -162,7 +173,11 @@ public class FileStorageService {
     /**
      * Загружает файл из InputStream в MinIO и возвращает object key
      */
-    public String uploadFromStream(InputStream inputStream, long size, String contentType, String folder, String extension) {
+    public String uploadFromStream(InputStream inputStream, long size, String contentType, String folder,
+            String extension) {
+        if (minioClient == null) {
+            return folder + "/disabled-" + UUID.randomUUID() + extension;
+        }
         try {
             String filename = folder + "/" + UUID.randomUUID() + extension;
             minioClient.putObject(
@@ -171,8 +186,7 @@ public class FileStorageService {
                             .object(filename)
                             .stream(inputStream, size, -1)
                             .contentType(contentType)
-                            .build()
-            );
+                            .build());
             return filename;
         } catch (Exception e) {
             throw new RuntimeException("Ошибка при загрузке файла из потока: " + e.getMessage(), e);
@@ -183,6 +197,9 @@ public class FileStorageService {
      * Удаляет файл из MinIO
      */
     public void deleteFile(String fileUrl) {
+        if (minioClient == null) {
+            return;
+        }
         try {
             String objectName = extractObjectNameFromUrl(fileUrl);
             if (objectName != null) {
@@ -190,8 +207,7 @@ public class FileStorageService {
                         RemoveObjectArgs.builder()
                                 .bucket(bucketName)
                                 .object(objectName)
-                                .build()
-                );
+                                .build());
             }
         } catch (Exception e) {
             System.err.println("Ошибка при удалении файла: " + e.getMessage());
@@ -213,10 +229,12 @@ public class FileStorageService {
     }
 
     /**
-     * Извлекает имя объекта из полного URL или возвращает значение как есть, если это уже ключ объекта.
+     * Извлекает имя объекта из полного URL или возвращает значение как есть, если
+     * это уже ключ объекта.
      */
     private String extractObjectNameFromUrl(String fileUrl) {
-        if (fileUrl == null) return null;
+        if (fileUrl == null)
+            return null;
         if (!fileUrl.startsWith("http://") && !fileUrl.startsWith("https://")) {
             return fileUrl;
         }

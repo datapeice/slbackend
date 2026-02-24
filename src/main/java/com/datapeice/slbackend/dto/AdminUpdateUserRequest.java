@@ -23,4 +23,6 @@ public class AdminUpdateUserRequest {
     private Boolean isPlayer;
 
     private String role;
+
+    private Boolean unlinkDiscord;
 }
