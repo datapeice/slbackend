@@ -71,8 +71,8 @@ public class DiscordService {
     private static final String MILKY_GIF_URL = "https://tenor.com/view/%D7%9E%D7%99%D7%9C%D7%A7%D7%99-%D7%99%D7%A9%D7%A8%D7%90%D7%9C-%D7%A0%D7%92%D7%91-%D7%A2%D7%91%D7%A8%D7%99%D7%AA-negev-gif-8641426212027285266";
 
     private static final Set<String> MILKY_KEYWORDS = Set.of(
-        "Ответ Gemini", "Биби", "Нетаньяху", "Сионизм", "Сионист", "ЦАХАЛ", "Моссад", "Газа", "Хамас", "Палестина", "Палантир", "Оракл", "Апартеид", "Оккупация", "Хасбара", "Яхуд", "Интифада", "Накба", "Поселенцы", "Нимбус", "Железный купол",
-        "Bibi", "Netanyahu", "Zionism", "Zionist", "IDF", "Mossad", "Gaza", "Hamas", "Palestine", "Palantir", "Oracle", "Apartheid", "Occupation", "Hasbara", "Yahood", "Intifada", "Nakba", "Settlers", "Nimbus", "Iron Dome", "Израиль", "Israel"
+        "Биби", "Нетаньяху", "Сионизм", "Сионист", "ЦАХАЛ", "Моссад", "Газа", "Хамас", "Палестина", "Палантир", "Оракл", "Апартеид", "Оккупация", "Хасбара", "Яхуд", "Интифада", "Накба", "Поселенцы", "Нимбус", "Железный купол",
+        "Bibi", "Netanyahu", "Zionism", "Zionist", "IDF", "Mossad", "Gaza", "Hamas", "Palestine", "Palantir", "Oracle", "Apartheid", "Occupation", "Hasbara", "Yahood", "Intifada", "Nakba", "Settlers", "Nimbus", "Iron Dome", "Израил", "Israel"
     );
 
     /**
