@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.util.HtmlUtils;
 
 @Service
 public class UserService {
@@ -75,7 +76,7 @@ public class UserService {
                 && fresh.getDiscordUserId() != null) {
             syncDiscordAvatarForUser(fresh);
         }
-        return mapToResponse(fresh);
+        return mapToResponse(fresh, true); // User sees their own full info
     }
 
     @Transactional
@@ -144,7 +145,8 @@ public class UserService {
                 throw new IllegalArgumentException("Minecraft никнейм уже используется");
             }
             changes.add("Minecraft Nick: " + user.getMinecraftNickname() + " -> " + request.getMinecraftNickname());
-            user.setMinecraftNickname(request.getMinecraftNickname().isBlank() ? null : request.getMinecraftNickname());
+            user.setMinecraftNickname(request.getMinecraftNickname().isBlank() ? null
+                    : HtmlUtils.htmlEscape(request.getMinecraftNickname()));
         }
 
         if (request.getBio() != null && !request.getBio().equals(user.getBio())) {
@@ -152,8 +154,9 @@ public class UserService {
                 throw new IllegalArgumentException(
                         "Текст 'О себе' нарушает правила платформы (токсичность/недопустимый контент). Пожалуйста, напишите другой текст.");
             }
-            changes.add(String.format("Bio updated (%d characters)", request.getBio().length()));
-            user.setBio(request.getBio());
+            String sanitizedBio = HtmlUtils.htmlEscape(request.getBio());
+            changes.add(String.format("Bio updated (%d characters)", sanitizedBio.length()));
+            user.setBio(sanitizedBio);
         }
 
         if (request.getNewPassword() != null && !request.getNewPassword().isBlank()) {
@@ -629,7 +632,6 @@ public class UserService {
         UserResponse response = new UserResponse();
         response.setId(user.getId());
         response.setUsername(user.getUsername());
-        response.setEmail(user.getEmail());
         response.setDiscordNickname(user.getDiscordNickname());
         response.setMinecraftNickname(user.getMinecraftNickname());
         response.setRole(user.getRole());
@@ -664,8 +666,9 @@ public class UserService {
             response.setBadges(badges);
         }
 
-        // Security info - only for admin view
+        // Security info - only for admin view or current user viewing self
         if (includeSecurityInfo) {
+            response.setEmail(user.getEmail());
             response.setRegistrationIp(user.getRegistrationIp());
             response.setRegistrationUserAgent(user.getRegistrationUserAgent());
             response.setLastLoginIp1(user.getLastLoginIp1());

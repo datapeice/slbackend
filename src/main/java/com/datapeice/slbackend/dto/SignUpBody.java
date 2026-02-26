@@ -10,6 +10,7 @@ import lombok.Data;
 public class SignUpBody {
     @NotBlank(message = "Username cannot be empty")
     @Size(min = 3, max = 20, message = "Username must be between 3 and 20 characters")
+    @Pattern(regexp = "^[a-zA-Z0-9_-]+$", message = "Имя пользователя может содержать только буквы, цифры, дефис и подчеркивание")
     private String username;
 
     @NotBlank(message = "Password cannot be empty")
@@ -24,6 +25,7 @@ public class SignUpBody {
     private String discordNickname;
 
     @NotBlank(message = "Укажите ваш никнейм в Minecraft")
+    @Pattern(regexp = "^[a-zA-Z0-9_]{3,16}$", message = "Некорректный никнейм Minecraft (только буквы, цифры и подчеркивание, от 3 до 16 символов)")
     private String minecraftNickname;
 
     @NotBlank(message = "reCAPTCHA token is required")
