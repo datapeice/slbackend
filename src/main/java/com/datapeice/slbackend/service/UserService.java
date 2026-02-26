@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 public class UserService {
@@ -77,6 +79,8 @@ public class UserService {
                 }
                 user.setAvatarUrl(url);
                 userRepository.save(user);
+                auditLogService.logAction(user.getId(), user.getUsername(), "USER_UPDATE_AVATAR",
+                        "Синхронизировал аватар из Discord", user.getId(), user.getUsername());
             }
         }
     }
@@ -101,8 +105,9 @@ public class UserService {
         }
 
         if (request.getDiscordNickname() != null && !request.getDiscordNickname().equals(user.getDiscordNickname())) {
-            if (user.isPlayer() && user.getDiscordNickname() != null) {
-                throw new IllegalArgumentException("Игрокам запрещено изменять Discord никнейм");
+            if (user.isPlayer()) {
+                throw new IllegalArgumentException(
+                        "Игрокам запрещено изменять Discord никнейм вручную. Используйте только кнопку привязки (OAuth2).");
             }
             if (!request.getDiscordNickname().isBlank()
                     && userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
@@ -118,8 +123,9 @@ public class UserService {
 
         if (request.getMinecraftNickname() != null
                 && !request.getMinecraftNickname().equals(user.getMinecraftNickname())) {
-            if (user.isPlayer() && user.getMinecraftNickname() != null) {
-                throw new IllegalArgumentException("Игрокам запрещено изменять Minecraft никнейм");
+            if (user.isPlayer()) {
+                throw new IllegalArgumentException(
+                        "Игрокам запрещено изменять Minecraft никнейм. Обратитесь к администратору.");
             }
             if (!request.getMinecraftNickname().isBlank()
                     && userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
@@ -171,11 +177,9 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserResponse> getAllUsersForAdmin() {
-        // Для админа - все пользователи, с security info
-        return userRepository.findAll().stream()
-                .map(u -> mapToResponse(u, true))
-                .collect(Collectors.toList());
+    public Page<UserResponse> getAllUsersForAdmin(Pageable pageable) {
+        return userRepository.findAll(pageable)
+                .map(u -> mapToResponse(u, true));
     }
 
     @Transactional
@@ -435,10 +439,45 @@ public class UserService {
         user.setDiscordNickname(request.getDiscordNickname());
         user.setMinecraftNickname(request.getMinecraftNickname());
         user.setBio(request.getBio());
-        user.setRole(UserRole.ROLE_USER);
+
+        if (request.getRole() != null) {
+            try {
+                user.setRole(UserRole.valueOf(request.getRole()));
+            } catch (IllegalArgumentException e) {
+                user.setRole(UserRole.ROLE_USER);
+            }
+        } else {
+            user.setRole(UserRole.ROLE_USER);
+        }
+
+        user.setPlayer(request.getIsPlayer() != null ? request.getIsPlayer() : false);
         user.setEmailVerified(request.isEmailVerified());
 
         User saved = userRepository.save(user);
+
+        // Sync Discord Avatar & Role if available
+        if (saved.getDiscordNickname() != null && discordService.isEnabled()) {
+            discordService.findDiscordUserId(saved.getDiscordNickname())
+                    .ifPresent(discordId -> {
+                        saved.setDiscordUserId(discordId);
+                        userRepository.save(saved);
+                        syncDiscordAvatarForUser(saved);
+
+                        if (saved.isPlayer()) {
+                            discordService.assignSlRole(discordId);
+                            discordService.sendDirectMessage(discordId,
+                                    "**Приветствую!**\n" +
+                                            "Вам выдана роль @SL на сервере StoryLegends\n" +
+                                            "Добро пожаловать на наш сервер, дабы **начать играть** вам нужно **прочитать** канал <#1229044440178626660>.\n"
+                                            +
+                                            "Так-же если вы ещё не ознакомилсь с [правилами](https://www.storylegends.xyz/rules) сервера, то обязательно это сделайте!\n"
+                                            +
+                                            "**Модератор:** " + adminName + "\n" +
+                                            "***С уважением, <:slteam:1244336090928906351>***");
+                        }
+                    });
+        }
+
         auditLogService.logAction(adminId, adminName, "ADMIN_CREATE_USER", "Админ создал нового пользователя",
                 saved.getId(), saved.getUsername());
         return mapToResponse(saved, true);

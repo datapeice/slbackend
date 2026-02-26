@@ -17,6 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class ApplicationService {
@@ -158,16 +162,14 @@ public class ApplicationService {
         return result;
     }
 
-    public List<ApplicationResponse> getAllApplications() {
-        return applicationRepository.findAll().stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
+    public Page<ApplicationResponse> getAllApplications(Pageable pageable) {
+        return applicationRepository.findAll(pageable)
+                .map(this::mapToResponse);
     }
 
-    public List<ApplicationResponse> getApplicationsByStatus(ApplicationStatus status) {
-        return applicationRepository.findAllByStatus(status).stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
+    public Page<ApplicationResponse> getApplicationsByStatus(ApplicationStatus status, Pageable pageable) {
+        return applicationRepository.findAllByStatus(status, pageable)
+                .map(this::mapToResponse);
     }
 
     @Transactional

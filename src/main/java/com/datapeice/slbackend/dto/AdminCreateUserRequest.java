@@ -14,10 +14,7 @@ public class AdminCreateUserRequest {
 
     @NotBlank
     @Size(min = 8)
-    @Pattern(
-            regexp = "^(?=.*[0-9])(?=.*[\\p{Ll}])(?=.*[\\p{Lu}])(?=.*[\\p{P}\\p{S}]).*$",
-            message = "Password must contain at least one digit, one lowercase, one uppercase letter and one special character"
-    )
+    @Pattern(regexp = "^(?=.*[0-9])(?=.*[\\p{Ll}])(?=.*[\\p{Lu}])(?=.*[\\p{P}\\p{S}]).*$", message = "Password must contain at least one digit, one lowercase, one uppercase letter and one special character")
     private String password;
 
     @Email
@@ -32,6 +29,9 @@ public class AdminCreateUserRequest {
 
     private String bio;
 
+    private String role;
+
+    private Boolean isPlayer;
+
     private boolean emailVerified = true; // Admin-created accounts are pre-verified
 }
-

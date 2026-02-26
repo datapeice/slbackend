@@ -18,6 +18,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByResetPasswordToken(String token);
 
+    Optional<User> findByDiscordOauthState(String discordOauthState);
+
     List<User> findByEmailVerifiedTrue();
 
     boolean existsByUsername(String username);

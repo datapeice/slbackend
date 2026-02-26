@@ -23,27 +23,39 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     private final JwtCore jwtCore;
     private final CustomUserDetailsService customUserDetailsService;
 
+    private String getClientIP(HttpServletRequest request) {
+        String cfIp = request.getHeader("CF-Connecting-IP");
+        if (cfIp != null && !cfIp.isBlank()) {
+            return cfIp.trim();
+        }
+        String xfHeader = request.getHeader("X-Forwarded-For");
+        if (xfHeader != null && !xfHeader.isBlank()) {
+            return xfHeader.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             try {
                 String token = authHeader.substring(7);
+                String ipAddress = getClientIP(request);
+                String userAgent = request.getHeader("User-Agent");
 
-                if (jwtCore.validateToken(token)) {
+                if (jwtCore.validateToken(token, ipAddress, userAgent)) {
                     String username = jwtCore.getUsernameFromToken(token);
                     UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
 
                     if (SecurityContextHolder.getContext().getAuthentication() == null) {
-                        UsernamePasswordAuthenticationToken authToken =
-                                new UsernamePasswordAuthenticationToken(
-                                        userDetails,
-                                        null,
-                                        userDetails.getAuthorities()
-                                );
+                        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities());
                         SecurityContextHolder.getContext().setAuthentication(authToken);
                     }
                 }
@@ -56,4 +68,3 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 }
-

@@ -222,7 +222,7 @@ public class AuthController {
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 user, null, user.getAuthorities());
-        String jwtToken = jwtCore.generateToken(authentication);
+        String jwtToken = jwtCore.generateToken(authentication, ipAddress, userAgent);
 
         return ResponseEntity.ok(Map.of(
                 "status", "success",
@@ -231,7 +231,10 @@ public class AuthController {
     }
 
     @PostMapping("/verify-email")
-    public ResponseEntity<?> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+    public ResponseEntity<?> verifyEmail(@Valid @RequestBody VerifyEmailRequest request,
+            HttpServletRequest httpRequest) {
+        String ipAddress = getClientIP(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
         logger.info("Email verification attempt with token: {}", request.getToken());
 
         User user = userRepository.findByEmailVerificationToken(request.getToken())
@@ -258,7 +261,7 @@ public class AuthController {
             // Возвращаем успех, генерируем новый токен
             Authentication authentication = new UsernamePasswordAuthenticationToken(
                     user, null, user.getAuthorities());
-            String jwtToken = jwtCore.generateToken(authentication);
+            String jwtToken = jwtCore.generateToken(authentication, ipAddress, userAgent);
 
             return ResponseEntity.ok(Map.of(
                     "status", "success",
@@ -288,7 +291,7 @@ public class AuthController {
         // Автоматический вход после подтверждения
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 user, null, user.getAuthorities());
-        String jwtToken = jwtCore.generateToken(authentication);
+        String jwtToken = jwtCore.generateToken(authentication, ipAddress, userAgent);
 
         return ResponseEntity.ok(Map.of(
                 "status", "success",
@@ -334,7 +337,7 @@ public class AuthController {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(body.getUsername(), body.getPassword()));
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            String jwtToken = jwtCore.generateToken(authentication);
+            String jwtToken = jwtCore.generateToken(authentication, ipAddress, userAgent);
 
             // Record login IP/UA for security logging (includes audit log)
             final String finalUa = userAgent != null && userAgent.length() > 255 ? userAgent.substring(0, 255)
@@ -428,20 +431,14 @@ public class AuthController {
         }
     }
 
-    /**
-     * GET /api/auth/discord/authorize
-     * Returns the Discord OAuth2 authorization URL for the current authenticated
-     * user.
-     * The user's JWT is Base64-encoded and passed as the OAuth2 state parameter
-     * so we can identify the user in the callback.
-     */
     @GetMapping("/discord/authorize")
     public ResponseEntity<?> getDiscordAuthorizeUrl(@AuthenticationPrincipal User currentUser) {
-        String jwtToken = jwtCore.generateToken(
-                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                        currentUser, null, currentUser.getAuthorities()));
-        String state = java.util.Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(jwtToken.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String state = java.util.UUID.randomUUID().toString();
+
+        // Re-load to attach to current session safely
+        User user = userRepository.findById(currentUser.getId()).orElseThrow();
+        user.setDiscordOauthState(state);
+        userRepository.save(user);
 
         String authUrl = discordOAuthService.buildAuthorizationUrl(state);
         return ResponseEntity.ok(Map.of("url", authUrl));
@@ -470,23 +467,16 @@ public class AuthController {
         String redirectBase = frontendUrl + "/profile?discord=";
 
         try {
-            // Decode JWT from state
-            String jwt = new String(
-                    java.util.Base64.getUrlDecoder().decode(state),
-                    java.nio.charset.StandardCharsets.UTF_8);
+            User user = userRepository.findByDiscordOauthState(state).orElse(null);
 
-            if (!jwtCore.validateToken(jwt)) {
-                response.sendRedirect(redirectBase + "error&reason=invalid_state");
-                return response;
-            }
-
-            String username = jwtCore.getUsernameFromToken(jwt);
-            User user = userRepository.findByUsername(username)
-                    .orElse(null);
             if (user == null) {
-                response.sendRedirect(redirectBase + "error&reason=user_not_found");
+                response.sendRedirect(redirectBase + "error&reason=invalid_state_or_user_not_found");
                 return response;
             }
+
+            // Clear state immediately to avoid reuse
+            user.setDiscordOauthState(null);
+            userRepository.save(user);
 
             if (user.isDiscordVerified()) {
                 response.sendRedirect(redirectBase + "already_connected");

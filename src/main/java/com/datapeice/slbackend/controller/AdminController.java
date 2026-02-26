@@ -15,6 +15,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import java.util.List;
 
 @RestController
@@ -41,14 +45,20 @@ public class AdminController {
     }
 
     @GetMapping("/applications")
-    public ResponseEntity<List<ApplicationResponse>> getAllApplications(
+    public ResponseEntity<Page<ApplicationResponse>> getAllApplications(
             @RequestParam(required = false) ApplicationStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
             @AuthenticationPrincipal User admin) {
-        List<ApplicationResponse> result;
+
+        // Sort by id descending (newest first)
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+
+        Page<ApplicationResponse> result;
         if (status != null) {
-            result = applicationService.getApplicationsByStatus(status);
+            result = applicationService.getApplicationsByStatus(status, pageable);
         } else {
-            result = applicationService.getAllApplications();
+            result = applicationService.getAllApplications(pageable);
         }
         return ResponseEntity.ok(result);
     }
@@ -75,8 +85,13 @@ public class AdminController {
     }
 
     @GetMapping("/users")
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsersForAdmin());
+    public ResponseEntity<Page<UserResponse>> getAllUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+
+        // Sort by id descending (newest first)
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+        return ResponseEntity.ok(userService.getAllUsersForAdmin(pageable));
     }
 
     @PostMapping("/users/{id}/ban")

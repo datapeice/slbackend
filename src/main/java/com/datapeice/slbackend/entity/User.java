@@ -30,7 +30,7 @@ public class User implements UserDetails {
     @Column(unique = true)
     private String discordNickname;
 
-    @Column(unique = true, nullable = false)
+    @Column(unique = true)
     private String minecraftNickname;
 
     @Enumerated(EnumType.STRING)
@@ -74,6 +74,9 @@ public class User implements UserDetails {
 
     // Discord OAuth verification - account is active only when discord is verified
     private boolean discordVerified = false;
+
+    // Discord OAuth state to prevent JWT leakage
+    private String discordOauthState;
 
     // Is the user currently a member of the linked Discord server
     @Column(columnDefinition = "boolean default false")

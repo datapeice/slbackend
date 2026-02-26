@@ -56,12 +56,14 @@ public class DiscordService {
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
     private final org.springframework.context.ApplicationContext applicationContext;
+    private final AuditLogService auditLogService;
 
     public DiscordService(FileStorageService fileStorageService, UserRepository userRepository,
-            org.springframework.context.ApplicationContext applicationContext) {
+            org.springframework.context.ApplicationContext applicationContext, AuditLogService auditLogService) {
         this.fileStorageService = fileStorageService;
         this.userRepository = userRepository;
         this.applicationContext = applicationContext;
+        this.auditLogService = auditLogService;
     }
 
     private static final String MIMI_GIF_URL = "https://tenor.com/view/mimi-typh-heart-sit-mimi-the-dog-gif-13978401409055125823";
@@ -71,9 +73,12 @@ public class DiscordService {
     private static final String MILKY_GIF_URL = "https://tenor.com/view/%D7%9E%D7%99%D7%9C%D7%A7%D7%99-%D7%99%D7%A9%D7%A8%D7%90%D7%9C-%D7%A0%D7%92%D7%91-%D7%A2%D7%91%D7%A8%D7%99%D7%AA-negev-gif-8641426212027285266";
 
     private static final Set<String> MILKY_KEYWORDS = Set.of(
-        "Биби", "Нетаньяху", "Сионизм", "Сионист", "ЦАХАЛ", "Моссад", "Газа", "Хамас", "Палестина", "Палантир", "Оракл", "Апартеид", "Оккупация", "Хасбара", "Яхуд", "Интифада", "Накба", "Поселенцы", "Нимбус", "Железный купол",
-        "Bibi", "Netanyahu", "Zionism", "Zionist", "IDF", "Mossad", "Gaza", "Hamas", "Palestine", "Palantir", "Oracle", "Apartheid", "Occupation", "Hasbara", "Yahood", "Intifada", "Nakba", "Settlers", "Nimbus", "Iron Dome", "Израил", "Israel"
-    );
+            "Биби", "Нетаньяху", "Сионизм", "Сионист", "ЦАХАЛ", "Моссад", "Газа", "Хамас", "Палестина", "Палантир",
+            "Оракл", "Апартеид", "Оккупация", "Хасбара", "Яхуд", "Интифада", "Накба", "Поселенцы", "Нимбус",
+            "Железный купол",
+            "Bibi", "Netanyahu", "Zionism", "Zionist", "IDF", "Mossad", "Gaza", "Hamas", "Palestine", "Palantir",
+            "Oracle", "Apartheid", "Occupation", "Hasbara", "Yahood", "Intifada", "Nakba", "Settlers", "Nimbus",
+            "Iron Dome", "Израил", "Israel");
 
     /**
      * JDA event listener that fires when a Discord user changes their username or
@@ -181,11 +186,11 @@ public class DiscordService {
                 return;
             }
             // @datapeice пасхалка
-            if (content.contains("@datapeice")) {
+            if (content.contains("@datapeice ")) {
                 event.getMessage().reply(DATAPEICE_IMAGE_URL).queue();
             }
             // @lendspele_ или @L пасхалка
-            if (content.contains("@lendspele_") || content.contains("@l")) {
+            if (content.contains("@lendspele_ ") || content.contains("@l ")) {
                 event.getMessage().reply(ANGRY_PING).queue();
             }
             // Roxy/Migurdia пасхалка
@@ -387,7 +392,7 @@ public class DiscordService {
      * Find Discord user ID by nickname (username).
      */
     public Optional<String> findDiscordUserId(String discordNickname) {
-        if (!isEnabled())
+        if (!isEnabled() || discordNickname == null)
             return Optional.empty();
         Guild guild = jda.getGuildById(guildId);
         if (guild == null)
@@ -601,6 +606,8 @@ public class DiscordService {
 
             logger.info("Discord avatar synced to MinIO for discordUserId={}: {}", discordUserId, minioUrl);
             return minioUrl;
+            // TODO auditLogService.logAction(0, "SYSTEM", "USER_CHANGE_AVATAR", "Админ
+            // удалил пользователя", 1 /*targetUserId*/, "targetUsername");
 
         } catch (Exception e) {
             logger.error("Failed to sync Discord avatar for {}: {}", discordUserId, e.getMessage());
