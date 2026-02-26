@@ -59,8 +59,12 @@ public class UserService {
     public UserResponse getUserProfile(User user) {
         // Re-fetch from DB to ensure session is open for EAGER collections
         User fresh = userRepository.findById(user.getId()).orElse(user);
-        // Auto-sync Discord avatar if missing
-        if ((fresh.getAvatarUrl() == null || fresh.getAvatarUrl().isBlank()) && fresh.getDiscordUserId() != null) {
+        // Auto-sync Discord avatar if missing or if it's a broken local path (storage
+        // disabled)
+        boolean isLocalPath = fresh.getAvatarUrl() != null && !fresh.getAvatarUrl().startsWith("http");
+        if ((fresh.getAvatarUrl() == null || fresh.getAvatarUrl().isBlank()
+                || (isLocalPath && !fileStorageService.isEnabled()))
+                && fresh.getDiscordUserId() != null) {
             syncDiscordAvatarForUser(fresh);
         }
         return mapToResponse(fresh);
@@ -560,25 +564,38 @@ public class UserService {
     private String resolveAvatarUrl(String avatarUrl) {
         if (avatarUrl == null || avatarUrl.isBlank())
             return null;
+
+        String resolved = avatarUrl;
         if (!avatarUrl.startsWith("http://") && !avatarUrl.startsWith("https://")) {
             // Stored as object key — generate fresh URL
             try {
-                return fileStorageService.resolveUrl(avatarUrl);
+                resolved = fileStorageService.resolveUrl(avatarUrl);
             } catch (Exception e) {
-                return avatarUrl;
+                resolved = avatarUrl;
+            }
+        } else {
+            // It's a full URL — try to extract object key and re-resolve (handles expired
+            // presigned URLs)
+            try {
+                String objectKey = fileStorageService.extractObjectKey(avatarUrl);
+                if (objectKey != null) {
+                    resolved = fileStorageService.resolveUrl(objectKey);
+                }
+            } catch (Exception ignored) {
             }
         }
-        // It's a full URL — try to extract object key and re-resolve (handles expired
-        // presigned URLs)
-        try {
-            String objectKey = fileStorageService.extractObjectKey(avatarUrl);
-            if (objectKey != null) {
-                return fileStorageService.resolveUrl(objectKey);
+
+        // If after resolution we still have a relative path (storage disabled or
+        // error),
+        // we MUST make it root-relative at least, but if storage is disabled,
+        // we might better return the original Discord URL if it's a Discord user.
+        if (!resolved.startsWith("http://") && !resolved.startsWith("https://")) {
+            if (!resolved.startsWith("/")) {
+                return "/" + resolved;
             }
-        } catch (Exception ignored) {
         }
-        // Fall back to original URL (e.g., Discord CDN)
-        return avatarUrl;
+
+        return resolved;
     }
 
     private UserResponse mapToResponse(User user, boolean includeSecurityInfo) {
