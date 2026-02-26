@@ -9,10 +9,21 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Iterator;
+import org.springframework.scheduling.annotation.Scheduled;
+
 @Service
 public class RecaptchaService {
 
     private static final Logger logger = LoggerFactory.getLogger(RecaptchaService.class);
+
+    // Cache for verified tokens to prevent Replay Attacks
+    // Store token -> Expiration Time (milliseconds)
+    private final ConcurrentHashMap<String, Long> usedTokens = new ConcurrentHashMap<>();
+
+    // Token validity period (Google says 2 mins, we keep it for 5 for safety)
+    private static final long TOKEN_CACHE_DURATION = 5 * 60 * 1000;
 
     @Value("${recaptcha.secret-key}")
     private String secretKey;
@@ -37,6 +48,12 @@ public class RecaptchaService {
             return false;
         }
 
+        // Check for Replay Attack
+        if (usedTokens.containsKey(token)) {
+            logger.error("reCAPTCHA Replay Attack detected! Token already used: {}", token.substring(0, 10) + "...");
+            return false;
+        }
+
         try {
             RestTemplate restTemplate = new RestTemplate();
 
@@ -54,7 +71,7 @@ public class RecaptchaService {
             String responseAction = (String) responseMap.get("action");
 
             logger.info("reCAPTCHA verification - success: {}, score: {}, action: {}, expected action: {}",
-                success, score, responseAction, action);
+                    success, score, responseAction, action);
 
             if (success == null || !success) {
                 logger.warn("reCAPTCHA verification failed - success is false");
@@ -72,6 +89,10 @@ public class RecaptchaService {
             }
 
             logger.info("reCAPTCHA verification successful for action: {}", action);
+
+            // Mark token as used
+            usedTokens.put(token, System.currentTimeMillis() + TOKEN_CACHE_DURATION);
+
             return true;
 
         } catch (Exception e) {
@@ -79,5 +100,20 @@ public class RecaptchaService {
             return false;
         }
     }
-}
 
+    /**
+     * Periodic cleanup of the used tokens cache.
+     */
+    @Scheduled(fixedRate = 60000) // Every minute
+    public void cleanupUsedTokens() {
+        long now = System.currentTimeMillis();
+        int initialSize = usedTokens.size();
+
+        usedTokens.entrySet().removeIf(entry -> now > entry.getValue());
+
+        int cleanedCount = initialSize - usedTokens.size();
+        if (cleanedCount > 0) {
+            logger.debug("Cleaned up {} expired reCAPTCHA tokens from cache", cleanedCount);
+        }
+    }
+}

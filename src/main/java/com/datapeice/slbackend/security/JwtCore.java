@@ -62,7 +62,10 @@ public class JwtCore {
 
             // 1. Проверка версии токена
             Integer tokenVersion = claims.get("v", Integer.class);
-            if (tokenVersion != null && expectedVersion != null && !tokenVersion.equals(expectedVersion)) {
+            if (tokenVersion == null)
+                tokenVersion = 0; // Старые токены считаем версией 0
+
+            if (expectedVersion != null && !tokenVersion.equals(expectedVersion)) {
                 throw new RuntimeException("TOKEN_VERSION_MISMATCH");
             }
 
