@@ -71,12 +71,9 @@ public class DiscordService {
     private static final String MILKY_GIF_URL = "https://tenor.com/view/%D7%9E%D7%99%D7%9C%D7%A7%D7%99-%D7%99%D7%A9%D7%A8%D7%90%D7%9C-%D7%A0%D7%92%D7%91-%D7%A2%D7%91%D7%A8%D7%99%D7%AA-negev-gif-8641426212027285266";
 
     private static final Set<String> MILKY_KEYWORDS = Set.of(
-            "Ответ Gemini", "Биби", "Нетаньяху", "Сионизм", "Сионист", "ЦАХАЛ", "Моссад", "Газа", "Хамас", "Палестина",
-            "Палантир", "Оракл", "Апартеид", "Оккупация", "Хасбара", "Яхуд", "Интифада", "Накба", "Поселенцы", "Нимбус",
-            "Железный купол",
-            "Bibi", "Netanyahu", "Zionism", "Zionist", "IDF", "Mossad", "Gaza", "Hamas", "Palestine", "Palantir",
-            "Oracle", "Apartheid", "Occupation", "Hasbara", "Yahood", "Intifada", "Nakba", "Settlers", "Nimbus",
-            "Iron Dome", "Израиль", "Israel");
+        "Биби", "Нетаньяху", "Сионизм", "Сионист", "ЦАХАЛ", "Моссад", "Газа", "Хамас", "Палестина", "Палантир", "Оракл", "Апартеид", "Оккупация", "Хасбара", "Яхуд", "Интифада", "Накба", "Поселенцы", "Нимбус", "Железный купол",
+        "Bibi", "Netanyahu", "Zionism", "Zionist", "IDF", "Mossad", "Gaza", "Hamas", "Palestine", "Palantir", "Oracle", "Apartheid", "Occupation", "Hasbara", "Yahood", "Intifada", "Nakba", "Settlers", "Nimbus", "Iron Dome", "Израил", "Israel"
+    );
 
     /**
      * JDA event listener that fires when a Discord user changes their username or
@@ -125,12 +122,8 @@ public class DiscordService {
             String discordUserId = event.getUser().getId();
             try {
                 userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
-                    String oldAvatarUrl = user.getAvatarUrl();
                     String newAvatarUrl = syncDiscordAvatar(discordUserId);
-                    if (newAvatarUrl != null && !newAvatarUrl.equals(oldAvatarUrl)) {
-                        if (oldAvatarUrl != null && !oldAvatarUrl.startsWith("http")) {
-                            fileStorageService.deleteFile(oldAvatarUrl);
-                        }
+                    if (newAvatarUrl != null) {
                         user.setAvatarUrl(newAvatarUrl);
                         userRepository.save(user);
                         logger.info("Auto-synced Discord avatar for userId={}", discordUserId);
@@ -161,12 +154,8 @@ public class DiscordService {
                 String discordUserId = event.getUser().getId();
                 try {
                     userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
-                        String oldAvatarUrl = user.getAvatarUrl();
                         String newAvatarUrl = syncDiscordAvatar(discordUserId);
-                        if (newAvatarUrl != null && !newAvatarUrl.equals(oldAvatarUrl)) {
-                            if (oldAvatarUrl != null && !oldAvatarUrl.startsWith("http")) {
-                                fileStorageService.deleteFile(oldAvatarUrl);
-                            }
+                        if (newAvatarUrl != null) {
                             user.setAvatarUrl(newAvatarUrl);
                             userRepository.save(user);
                             logger.info("Auto-synced Discord guild avatar for userId={}", discordUserId);
@@ -591,7 +580,27 @@ public class DiscordService {
             }
 
             // Download avatar bytes
-            return avatarUrl;
+            HttpClient httpClient = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(avatarUrl))
+                    .GET()
+                    .build();
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+            if (response.statusCode() != 200) {
+                logger.warn("Failed to download Discord avatar for {}: HTTP {}", discordUserId, response.statusCode());
+                return null;
+            }
+
+            String contentType = response.headers().firstValue("content-type").orElse("image/png");
+            String extension = contentType.contains("gif") ? ".gif" : ".png";
+            long contentLength = response.headers().firstValueAsLong("content-length").orElse(-1);
+
+            String minioUrl = fileStorageService.uploadFromStream(
+                    response.body(), contentLength, contentType, "avatars", extension);
+
+            logger.info("Discord avatar synced to MinIO for discordUserId={}: {}", discordUserId, minioUrl);
+            return minioUrl;
 
         } catch (Exception e) {
             logger.error("Failed to sync Discord avatar for {}: {}", discordUserId, e.getMessage());
