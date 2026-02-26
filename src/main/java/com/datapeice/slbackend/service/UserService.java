@@ -575,17 +575,23 @@ public class UserService {
      * - Old full S3/MinIO URL → extracts object key, then generates fresh URL
      * - External URL (Discord CDN etc.) → returned as-is
      */
-    private String resolveAvatarUrl(String avatarUrl) {
-        if (avatarUrl == null || avatarUrl.isBlank())
-            return null;
+    private String resolveAvatarUrl(String avatarUrl, String username) {
+        if (avatarUrl == null || avatarUrl.isBlank()) {
+            return username != null && !username.isBlank() ? username.substring(0, 1).toUpperCase() : null;
+        }
 
         String resolved = avatarUrl;
         if (!avatarUrl.startsWith("http://") && !avatarUrl.startsWith("https://")) {
             // Stored as object key — generate fresh URL
             try {
                 resolved = fileStorageService.resolveUrl(avatarUrl);
+                // If storage is disabled, resolveUrl returns objectKey (e.g. "avatars/...")
+                // which leads to 404. In this case, we prefer null/letter fallback.
+                if (resolved != null && !resolved.startsWith("http")) {
+                    resolved = null;
+                }
             } catch (Exception e) {
-                resolved = avatarUrl;
+                resolved = null;
             }
         } else {
             // It's a full URL — try to extract object key and re-resolve (handles expired
@@ -599,14 +605,8 @@ public class UserService {
             }
         }
 
-        // If after resolution we still have a relative path (storage disabled or
-        // error),
-        // we MUST make it root-relative at least, but if storage is disabled,
-        // we might better return the original Discord URL if it's a Discord user.
-        if (!resolved.startsWith("http://") && !resolved.startsWith("https://")) {
-            if (!resolved.startsWith("/")) {
-                return "/" + resolved;
-            }
+        if (resolved == null || resolved.isBlank() || (!resolved.startsWith("http") && resolved.length() > 1)) {
+            return username != null && !username.isBlank() ? username.substring(0, 1).toUpperCase() : null;
         }
 
         return resolved;
@@ -620,7 +620,7 @@ public class UserService {
         response.setDiscordNickname(user.getDiscordNickname());
         response.setMinecraftNickname(user.getMinecraftNickname());
         response.setRole(user.getRole());
-        response.setAvatarUrl(resolveAvatarUrl(user.getAvatarUrl()));
+        response.setAvatarUrl(resolveAvatarUrl(user.getAvatarUrl(), user.getUsername()));
         response.setBanned(user.isBanned());
         response.setBanReason(user.getBanReason());
         response.setEmailVerified(user.isEmailVerified());
