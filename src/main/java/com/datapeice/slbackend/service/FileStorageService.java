@@ -50,6 +50,10 @@ public class FileStorageService {
                 minioEndpoint, bucketName, this.minioPublicUrl, presignedUrlExpiryHours, this.isAwsS3);
     }
 
+    public boolean isEnabled() {
+        return minioClient != null || s3Presigner != null;
+    }
+
     /**
      * Builds a public URL for a stored object.
      * If minio.public-url is set, uses it as base (virtual-hosted-style for AWS

@@ -584,6 +584,12 @@ public class DiscordService {
                 avatarUrl = avatarUrl + "?size=256";
             }
 
+            if (!fileStorageService.isEnabled()) {
+                logger.info("Minio disabled, returning original Discord avatar url for discordUserId={}",
+                        discordUserId);
+                return avatarUrl;
+            }
+
             // Download avatar bytes
             HttpClient httpClient = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
@@ -594,7 +600,7 @@ public class DiscordService {
 
             if (response.statusCode() != 200) {
                 logger.warn("Failed to download Discord avatar for {}: HTTP {}", discordUserId, response.statusCode());
-                return null;
+                return avatarUrl; // Fallback to Discord CDN
             }
 
             String contentType = response.headers().firstValue("content-type").orElse("image/png");

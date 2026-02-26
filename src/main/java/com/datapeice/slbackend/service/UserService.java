@@ -55,7 +55,7 @@ public class UserService {
         return siteSettingsService.getSettings();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public UserResponse getUserProfile(User user) {
         // Re-fetch from DB to ensure session is open for EAGER collections
         User fresh = userRepository.findById(user.getId()).orElse(user);
@@ -315,6 +315,15 @@ public class UserService {
             }
             changes.add("Discord Nick: " + user.getDiscordNickname() + " -> " + request.getDiscordNickname());
             user.setDiscordNickname(request.getDiscordNickname());
+
+            // Auto-sync Discord ID and Avatar if nickname changed
+            if (discordService.isEnabled()) {
+                discordService.findDiscordUserId(user.getDiscordNickname())
+                        .ifPresent(discordId -> {
+                            user.setDiscordUserId(discordId);
+                            syncDiscordAvatarForUser(user);
+                        });
+            }
         }
 
         if (request.getMinecraftNickname() != null
