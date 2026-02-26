@@ -325,8 +325,22 @@ public class UserService {
                 discordService.findDiscordUserId(user.getDiscordNickname())
                         .ifPresent(discordId -> {
                             user.setDiscordUserId(discordId);
-                            syncDiscordAvatarForUser(user);
+                            if (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) {
+                                syncDiscordAvatarForUser(user);
+                            }
                         });
+            }
+        } else if (user.getDiscordNickname() != null
+                && (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank())) {
+            // Pull avatar if missing even if nick didn't change
+            if (discordService.isEnabled()) {
+                if (user.getDiscordUserId() == null) {
+                    discordService.findDiscordUserId(user.getDiscordNickname())
+                            .ifPresent(user::setDiscordUserId);
+                }
+                if (user.getDiscordUserId() != null) {
+                    syncDiscordAvatarForUser(user);
+                }
             }
         }
 
