@@ -1,5 +1,6 @@
 package com.datapeice.slbackend.security;
 
+import com.datapeice.slbackend.entity.User;
 import io.jsonwebtoken.Jwts;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -37,10 +38,11 @@ public class JwtCore {
     }
 
     public String generateToken(Authentication authentication, String ipAddress, String userAgent) {
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        User user = (User) authentication.getPrincipal();
         return Jwts.builder()
-                .subject(userDetails.getUsername())
+                .subject(user.getUsername())
                 .claim("fp", generateFingerprint(ipAddress, userAgent))
+                .claim("v", user.getTokenVersion())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + lifetime))
                 .signWith(key(this.secretKey))
@@ -54,19 +56,50 @@ public class JwtCore {
                 .getPayload().getSubject();
     }
 
-    public boolean validateToken(String token, String ipAddress, String userAgent) {
+    public boolean validateToken(String token, String ipAddress, String userAgent, Integer expectedVersion) {
         try {
             var claims = Jwts.parser().verifyWith(key(this.secretKey)).build().parseSignedClaims(token).getPayload();
+
+            // 1. Проверка версии токена
+            Integer tokenVersion = claims.get("v", Integer.class);
+            if (tokenVersion != null && expectedVersion != null && !tokenVersion.equals(expectedVersion)) {
+                throw new RuntimeException("TOKEN_VERSION_MISMATCH");
+            }
+
+            // 2. Проверка Fingerprint
             String tokenFp = claims.get("fp", String.class);
             String currentFp = generateFingerprint(ipAddress, userAgent);
-
-            // Если в токене есть отпечаток, строго проверяем на совпадение
             if (tokenFp != null && !tokenFp.equals(currentFp)) {
-                return false;
+                throw new RuntimeException("FINGERPRINT_MISMATCH");
             }
+
             return true;
+        } catch (RuntimeException e) {
+            String msg = e.getMessage();
+            if ("FINGERPRINT_MISMATCH".equals(msg) || "TOKEN_VERSION_MISMATCH".equals(msg)) {
+                throw e;
+            }
+            return false;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    public String getFingerprintFromToken(String token) {
+        try {
+            return Jwts.parser().verifyWith(key(this.secretKey)).build().parseSignedClaims(token)
+                    .getPayload().get("fp", String.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public Integer getVersionFromToken(String token) {
+        try {
+            return Jwts.parser().verifyWith(key(this.secretKey)).build().parseSignedClaims(token)
+                    .getPayload().get("v", Integer.class);
+        } catch (Exception e) {
+            return null;
         }
     }
 

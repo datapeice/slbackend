@@ -14,17 +14,13 @@ public class SignUpBody {
 
     @NotBlank(message = "Password cannot be empty")
     @Size(min = 8, message = "Password must be at least 8 characters long")
-    @Pattern(
-            regexp = "^(?=.*[0-9])(?=.*[\\p{Ll}])(?=.*[\\p{Lu}])(?=.*[\\p{P}\\p{S}]).*$",
-            message = "Password must contain at least one digit, one lowercase, one uppercase letter and one special character"
-    )
+    @Pattern(regexp = "^(?=.*[0-9])(?=.*[\\p{Ll}])(?=.*[\\p{Lu}])(?=.*[\\p{P}\\p{S}]).*$", message = "Password must contain at least one digit, one lowercase, one uppercase letter and one special character")
     private String password;
 
     @Email(message = "Некорректный формат email")
     @NotBlank
     private String email;
 
-    @NotBlank(message = "Укажите ваш Discord")
     private String discordNickname;
 
     @NotBlank(message = "Укажите ваш никнейм в Minecraft")

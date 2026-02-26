@@ -162,7 +162,8 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("error", "Email уже используется"));
         }
 
-        if (userRepository.existsByDiscordNickname(body.getDiscordNickname())) {
+        if (body.getDiscordNickname() != null && !body.getDiscordNickname().isBlank()
+                && userRepository.existsByDiscordNickname(body.getDiscordNickname())) {
             return ResponseEntity.badRequest().body(Map.of("error", "Discord никнейм уже используется"));
         }
 
@@ -195,7 +196,7 @@ public class AuthController {
             userRepository.save(user);
             auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER",
                     String.format("Зарегистрировался (MC: %s, Discord: %s)", user.getMinecraftNickname(),
-                            user.getDiscordNickname()),
+                            user.getDiscordNickname() != null ? user.getDiscordNickname() : "Не привязан"),
                     user.getId(), user.getUsername());
 
             // Отправляем письмо подтверждения
@@ -217,7 +218,7 @@ public class AuthController {
         userRepository.save(user);
         auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER",
                 String.format("Зарегистрировался (MC: %s, Discord: %s)", user.getMinecraftNickname(),
-                        user.getDiscordNickname()),
+                        user.getDiscordNickname() != null ? user.getDiscordNickname() : "Не привязан"),
                 user.getId(), user.getUsername());
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(

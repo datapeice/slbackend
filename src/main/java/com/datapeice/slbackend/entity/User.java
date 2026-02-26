@@ -91,6 +91,10 @@ public class User implements UserDetails {
     private String lastLoginIp2;
     private String lastLoginUserAgent2;
 
+    // JWT Token Version for instant invalidation on security events
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private Integer tokenVersion = 0;
+
     // Badges
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "user_badges", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "badge_id"))

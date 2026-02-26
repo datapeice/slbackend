@@ -1,13 +1,14 @@
 package com.datapeice.slbackend.security;
 
+import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.service.CustomUserDetailsService;
+import com.datapeice.slbackend.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -15,13 +16,17 @@ import java.io.IOException;
 
 @Component
 public class JwtRequestFilter extends OncePerRequestFilter {
-    public JwtRequestFilter(JwtCore jwtCore, CustomUserDetailsService customUserDetailsService) {
-        this.jwtCore = jwtCore;
-        this.customUserDetailsService = customUserDetailsService;
-    }
-
     private final JwtCore jwtCore;
     private final CustomUserDetailsService customUserDetailsService;
+    private final UserRepository userRepository;
+
+    public JwtRequestFilter(JwtCore jwtCore,
+            CustomUserDetailsService customUserDetailsService,
+            UserRepository userRepository) {
+        this.jwtCore = jwtCore;
+        this.customUserDetailsService = customUserDetailsService;
+        this.userRepository = userRepository;
+    }
 
     private String getClientIP(HttpServletRequest request) {
         String cfIp = request.getHeader("CF-Connecting-IP");
@@ -47,21 +52,38 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 String ipAddress = getClientIP(request);
                 String userAgent = request.getHeader("User-Agent");
 
-                if (jwtCore.validateToken(token, ipAddress, userAgent)) {
+                try {
+                    // 1. Извлекаем username
                     String username = jwtCore.getUsernameFromToken(token);
-                    UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
 
-                    if (SecurityContextHolder.getContext().getAuthentication() == null) {
-                        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities());
-                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                        // 2. Загружаем пользователя
+                        User user = (User) customUserDetailsService.loadUserByUsername(username);
+
+                        // 3. Валидируем токен (UA + Version)
+                        if (jwtCore.validateToken(token, ipAddress, userAgent, user.getTokenVersion())) {
+                            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                                    user,
+                                    null,
+                                    user.getAuthorities());
+                            SecurityContextHolder.getContext().setAuthentication(authToken);
+                        }
+                    }
+                } catch (RuntimeException e) {
+                    String msg = e.getMessage();
+                    if ("FINGERPRINT_MISMATCH".equals(msg)) {
+                        logger.warn("UserAgent mismatch! Revoking all tokens for user.");
+                        String username = jwtCore.getUsernameFromToken(token);
+                        userRepository.findByUsername(username).ifPresent(u -> {
+                            u.setTokenVersion(u.getTokenVersion() + 1);
+                            userRepository.save(u);
+                        });
+                    } else if ("TOKEN_VERSION_MISMATCH".equals(msg)) {
+                        logger.info("Outdated token version rejected.");
                     }
                 }
             } catch (Exception e) {
-                // Игнорируем ошибки валидации токена, просто не устанавливаем аутентификацию
-                logger.error("JWT validation failed: " + e.getMessage());
+                logger.error("JWT validation error: " + e.getMessage());
             }
         }
 
