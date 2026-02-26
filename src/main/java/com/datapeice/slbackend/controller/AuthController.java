@@ -143,6 +143,8 @@ public class AuthController {
 
             if (!recaptchaService.verifyRecaptcha(token, "register")) {
                 logger.warn("reCAPTCHA verification failed for IP: {}", ipAddress);
+                auditLogService.logSecurityIncident(body.getUsername(), "RECAPTCHA_FAIL",
+                        "Ошибка проверки reCAPTCHA при регистрации", ipAddress, userAgent);
                 return ResponseEntity.badRequest().body(Map.of(
                         "error", "reCAPTCHA проверка не пройдена",
                         "hint", "Возможно, вы робот или токен истек"));
@@ -353,10 +355,9 @@ public class AuthController {
                     "username", user.getUsername(),
                     "isPlayer", user.isPlayer()));
         } catch (Exception e) {
-            logger.error("Authentication failed for user: {}", body.getUsername(), e);
-            auditLogService.logAction(null, body.getUsername(), "USER_LOGIN_FAIL",
-                    String.format("Неудачная попытка входа под IP %s, User-Agent: %s", ipAddress, userAgent),
-                    null, null);
+            logger.error("Authentication failed for user: {}", body.getUsername());
+            auditLogService.logSecurityIncident(body.getUsername(), "LOGIN_FAIL",
+                    String.format("Неверный пароль или имя пользователя"), ipAddress, userAgent);
             return ResponseEntity.badRequest().body(Map.of("error", "Неверное имя пользователя или пароль"));
         }
     }

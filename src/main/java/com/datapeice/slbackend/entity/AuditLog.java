@@ -29,6 +29,11 @@ public class AuditLog {
     private Long targetUserId;
     private String targetUsername;
 
+    private String ipAddress;
+
+    @Column(length = 512)
+    private String userAgent;
+
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

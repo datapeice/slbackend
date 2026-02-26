@@ -21,6 +21,12 @@ public class AuditLogService {
     @Async
     public void logAction(Long actorId, String actorUsername, String actionType, String details, Long targetUserId,
             String targetUsername) {
+        logAction(actorId, actorUsername, actionType, details, targetUserId, targetUsername, null, null);
+    }
+
+    @Async
+    public void logAction(Long actorId, String actorUsername, String actionType, String details, Long targetUserId,
+            String targetUsername, String ipAddress, String userAgent) {
         AuditLog log = new AuditLog();
         log.setActorId(actorId);
         log.setActorUsername(actorUsername);
@@ -28,9 +34,19 @@ public class AuditLogService {
         log.setDetails(details);
         log.setTargetUserId(targetUserId);
         log.setTargetUsername(targetUsername);
+        log.setIpAddress(ipAddress);
+        log.setUserAgent(userAgent != null && userAgent.length() > 512 ? userAgent.substring(0, 512) : userAgent);
         log.setCreatedAt(LocalDateTime.now());
 
         auditLogRepository.save(log);
+    }
+
+    /**
+     * Special method for security-related events.
+     */
+    @Async
+    public void logSecurityIncident(String actorUsername, String actionType, String details, String ip, String ua) {
+        logAction(null, actorUsername, "SECURITY_" + actionType, details, null, null, ip, ua);
     }
 
     public Page<AuditLog> getLogs(String query, Pageable pageable) {

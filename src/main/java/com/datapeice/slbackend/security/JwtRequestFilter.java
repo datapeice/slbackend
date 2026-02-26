@@ -19,13 +19,16 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     private final JwtCore jwtCore;
     private final CustomUserDetailsService customUserDetailsService;
     private final UserRepository userRepository;
+    private final com.datapeice.slbackend.service.AuditLogService auditLogService;
 
     public JwtRequestFilter(JwtCore jwtCore,
             CustomUserDetailsService customUserDetailsService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            com.datapeice.slbackend.service.AuditLogService auditLogService) {
         this.jwtCore = jwtCore;
         this.customUserDetailsService = customUserDetailsService;
         this.userRepository = userRepository;
+        this.auditLogService = auditLogService;
     }
 
     private String getClientIP(HttpServletRequest request) {
@@ -74,12 +77,20 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                     if ("FINGERPRINT_MISMATCH".equals(msg)) {
                         logger.warn("UserAgent mismatch! Revoking all tokens for user.");
                         String username = jwtCore.getUsernameFromToken(token);
+
+                        auditLogService.logSecurityIncident(username, "FINGERPRINT_MISMATCH",
+                                "Попытка использования токена с другим User-Agent. Все сессии пользователя аннулированы.",
+                                ipAddress, userAgent);
+
                         userRepository.findByUsername(username).ifPresent(u -> {
                             u.setTokenVersion(u.getTokenVersion() + 1);
                             userRepository.save(u);
                         });
                     } else if ("TOKEN_VERSION_MISMATCH".equals(msg)) {
                         logger.info("Outdated token version rejected.");
+                        String username = jwtCore.getUsernameFromToken(token);
+                        auditLogService.logSecurityIncident(username, "TOKEN_VERSION_MISMATCH",
+                                "Попытка входа по устаревшему/аннулированному токену.", ipAddress, userAgent);
                     }
                 }
             } catch (Exception e) {
