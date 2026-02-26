@@ -164,11 +164,6 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("error", "Email уже используется"));
         }
 
-        if (body.getDiscordNickname() != null && !body.getDiscordNickname().isBlank()
-                && userRepository.existsByDiscordNickname(body.getDiscordNickname())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Discord никнейм уже используется"));
-        }
-
         if (userRepository.existsByMinecraftNickname(body.getMinecraftNickname())) {
             return ResponseEntity.badRequest().body(Map.of("error", "Minecraft никнейм уже используется"));
         }
@@ -177,7 +172,6 @@ public class AuthController {
         user.setUsername(body.getUsername());
         user.setPassword(bCryptPasswordEncoder.encode(body.getPassword()));
         user.setEmail(body.getEmail());
-        user.setDiscordNickname(body.getDiscordNickname());
         user.setMinecraftNickname(body.getMinecraftNickname());
         user.setRole(UserRole.ROLE_USER);
         // Security logging
@@ -197,8 +191,7 @@ public class AuthController {
 
             userRepository.save(user);
             auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER",
-                    String.format("Зарегистрировался (MC: %s, Discord: %s)", user.getMinecraftNickname(),
-                            user.getDiscordNickname() != null ? user.getDiscordNickname() : "Не привязан"),
+                    String.format("Зарегистрировался (MC: %s)", user.getMinecraftNickname()),
                     user.getId(), user.getUsername());
 
             // Отправляем письмо подтверждения
@@ -219,8 +212,7 @@ public class AuthController {
         // Если auto-verify включен, сразу логиним пользователя
         userRepository.save(user);
         auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER",
-                String.format("Зарегистрировался (MC: %s, Discord: %s)", user.getMinecraftNickname(),
-                        user.getDiscordNickname() != null ? user.getDiscordNickname() : "Не привязан"),
+                String.format("Зарегистрировался (MC: %s)", user.getMinecraftNickname()),
                 user.getId(), user.getUsername());
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(

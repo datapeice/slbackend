@@ -22,8 +22,6 @@ public class SignUpBody {
     @NotBlank
     private String email;
 
-    private String discordNickname;
-
     @NotBlank(message = "Укажите ваш никнейм в Minecraft")
     @Pattern(regexp = "^[a-zA-Z0-9_]{3,16}$", message = "Некорректный никнейм Minecraft (только буквы, цифры и подчеркивание, от 3 до 16 символов)")
     private String minecraftNickname;
