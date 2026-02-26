@@ -17,14 +17,16 @@ import java.nio.charset.StandardCharsets;
 public class JwtCore {
     @Value("${spring.security.key}")
     private String secretKey;
-    private long lifetime = 86400000;
+    private long lifetime = 604800000; // 7 days
 
     private SecretKey key(String secretKey) {
         return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 
     public String generateFingerprint(String ipAddress, String userAgent) {
-        String base = (ipAddress != null ? ipAddress : "") + "|" + (userAgent != null ? userAgent : "");
+        // Remove IP because on Heroku/cloud it changes often (different load balancers)
+        // Only use UserAgent for a mild device-based fingerprinting
+        String base = (userAgent != null ? userAgent : "");
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] hash = md.digest(base.getBytes(StandardCharsets.UTF_8));

@@ -313,33 +313,33 @@ public class UserService {
             emailService.sendVerificationEmail(request.getEmail(), user.getUsername(), verificationToken);
         }
 
-        if (request.getDiscordNickname() != null && !request.getDiscordNickname().equals(user.getDiscordNickname())) {
-            if (userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
-                throw new IllegalArgumentException("Discord никнейм уже используется");
+        // Discord Sync Logic
+        if (request.getDiscordNickname() != null) {
+            boolean nickChanged = !request.getDiscordNickname().equals(user.getDiscordNickname());
+            if (nickChanged) {
+                if (userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
+                    throw new IllegalArgumentException("Discord никнейм уже используется");
+                }
+                changes.add("Discord Nick: " + user.getDiscordNickname() + " -> " + request.getDiscordNickname());
+                user.setDiscordNickname(request.getDiscordNickname());
             }
-            changes.add("Discord Nick: " + user.getDiscordNickname() + " -> " + request.getDiscordNickname());
-            user.setDiscordNickname(request.getDiscordNickname());
 
-            // Auto-sync Discord ID and Avatar if nickname changed
             if (discordService.isEnabled()) {
-                discordService.findDiscordUserId(user.getDiscordNickname())
-                        .ifPresent(discordId -> {
-                            user.setDiscordUserId(discordId);
-                            if (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) {
-                                syncDiscordAvatarForUser(user);
-                            }
-                        });
-            }
-        } else if (user.getDiscordNickname() != null
-                && (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank())) {
-            // Pull avatar if missing even if nick didn't change
-            if (discordService.isEnabled()) {
-                if (user.getDiscordUserId() == null) {
+                // If ID is missing or nick changed, try to find current ID
+                if (user.getDiscordUserId() == null || nickChanged) {
                     discordService.findDiscordUserId(user.getDiscordNickname())
                             .ifPresent(user::setDiscordUserId);
                 }
+
                 if (user.getDiscordUserId() != null) {
-                    syncDiscordAvatarForUser(user);
+                    // Sync avatar if it's not a local file, OR if it's currently a placeholder/null
+                    String currentAvatar = user.getAvatarUrl();
+                    boolean isLocalFile = currentAvatar != null && !currentAvatar.startsWith("http")
+                            && currentAvatar.length() > 5;
+
+                    if (!isLocalFile || currentAvatar == null || currentAvatar.isBlank()) {
+                        syncDiscordAvatarForUser(user);
+                    }
                 }
             }
         }
