@@ -9,7 +9,12 @@ import java.util.List;
 @Repository
 public interface WarningRepository extends JpaRepository<Warning, Long> {
     List<Warning> findByUserId(Long userId);
-    List<Warning> findByUserIdAndActiveTrue(Long userId);
-    long countByUserIdAndActiveTrue(Long userId);
-}
 
+    List<Warning> findByUserIdAndActiveTrue(Long userId);
+
+    long countByUserIdAndActiveTrue(Long userId);
+
+    void deleteAllByUserId(Long userId);
+
+    void deleteAllByIssuedById(Long issuedById);
+}

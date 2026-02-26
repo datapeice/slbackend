@@ -19,4 +19,6 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
 
     List<Application> findAllByUserIdAndStatus(Long userId, ApplicationStatus status);
 
+    void deleteAllByUserId(Long userId);
+
 }

@@ -9,6 +9,8 @@ import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.entity.UserRole;
 import com.datapeice.slbackend.entity.SiteSettings;
 import com.datapeice.slbackend.repository.UserRepository;
+import com.datapeice.slbackend.repository.ApplicationRepository;
+import com.datapeice.slbackend.repository.WarningRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,8 @@ public class UserService {
     private final SiteSettingsService siteSettingsService;
     private final AuditLogService auditLogService;
     private final ModerationService moderationService;
+    private final ApplicationRepository applicationRepository;
+    private final WarningRepository warningRepository;
 
     public UserService(UserRepository userRepository,
             AuditLogService auditLogService,
@@ -39,7 +43,9 @@ public class UserService {
             SiteSettingsService siteSettingsService,
             ModerationService moderationService,
             GeoIpService geoIpService,
-            BCryptPasswordEncoder passwordEncoder) {
+            BCryptPasswordEncoder passwordEncoder,
+            ApplicationRepository applicationRepository,
+            WarningRepository warningRepository) {
         this.userRepository = userRepository;
         this.auditLogService = auditLogService;
         this.discordService = discordService;
@@ -49,6 +55,8 @@ public class UserService {
         this.moderationService = moderationService;
         this.geoIpService = geoIpService;
         this.passwordEncoder = passwordEncoder;
+        this.applicationRepository = applicationRepository;
+        this.warningRepository = warningRepository;
     }
 
     private SiteSettings getSiteSettings() {
@@ -435,6 +443,11 @@ public class UserService {
     public void deleteUser(Long userId, Long adminId, String adminName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
+
+        // Delete related entities manually to avoid FK violations
+        applicationRepository.deleteAllByUserId(userId);
+        warningRepository.deleteAllByUserId(userId);
+        warningRepository.deleteAllByIssuedById(userId);
 
         userRepository.delete(user);
         auditLogService.logAction(adminId, adminName, "ADMIN_DELETE_USER", "Админ удалил пользователя", user.getId(),
