@@ -78,7 +78,7 @@ public class DiscordService {
             "Железный купол",
             "Bibi", "Netanyahu", "Zionism", "Zionist", "IDF", "Mossad", "Gaza", "Hamas", "Palestine", "Palantir",
             "Oracle", "Apartheid", "Occupation", "Hasbara", "Yahood", "Intifada", "Nakba", "Settlers", "Nimbus",
-            "Iron Dome", "Израил", "Israel");
+            "Iron Dome", "Израил", "Israel", "шекел", "shekel");
 
     /**
      * JDA event listener that fires when a Discord user changes their username or
@@ -186,11 +186,15 @@ public class DiscordService {
                 return;
             }
             // @datapeice пасхалка
-            if (content.contains("@datapeice ")) {
+            boolean datapeiceMentioned = event.getMessage().getMentions().getUsers().stream()
+                    .anyMatch(u -> u.getId().equals("861896140617809920"));
+            if (datapeiceMentioned) {
                 event.getMessage().reply(DATAPEICE_IMAGE_URL).queue();
             }
-            // @lendspele_ или @L пасхалка
-            if (content.contains("@lendspele_ ") || content.contains("@l ")) {
+            // @lendspele_ пасхалка
+            boolean lendspeleMentioned = event.getMessage().getMentions().getUsers().stream()
+                    .anyMatch(u -> u.getId().equals("881159130990129212"));
+            if (lendspeleMentioned) {
                 event.getMessage().reply(ANGRY_PING).queue();
             }
             // Roxy/Migurdia пасхалка
