@@ -21,10 +21,8 @@ public class AdminCreateUserRequest {
     @NotBlank
     private String email;
 
-    @NotBlank
     private String discordNickname;
 
-    @NotBlank
     private String minecraftNickname;
 
     private String bio;

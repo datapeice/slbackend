@@ -12,10 +12,10 @@ public class AdminUpdateUserRequest {
     @Email
     private String email;
 
-    @Size(min = 3, max = 50)
+    @Size(max = 50)
     private String discordNickname;
 
-    @Size(min = 3, max = 50)
+    @Size(max = 50)
     private String minecraftNickname;
 
     private String bio;

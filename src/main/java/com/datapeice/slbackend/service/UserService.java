@@ -328,11 +328,14 @@ public class UserService {
         if (request.getDiscordNickname() != null) {
             boolean nickChanged = !request.getDiscordNickname().equals(user.getDiscordNickname());
             if (nickChanged) {
-                if (userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
+                if (request.getDiscordNickname() != null && !request.getDiscordNickname().isBlank()
+                        && userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
                     throw new IllegalArgumentException("Discord никнейм уже используется");
                 }
                 changes.add("Discord Nick: " + user.getDiscordNickname() + " -> " + request.getDiscordNickname());
-                user.setDiscordNickname(request.getDiscordNickname());
+                user.setDiscordNickname(request.getDiscordNickname() == null || request.getDiscordNickname().isBlank()
+                        ? null
+                        : request.getDiscordNickname());
             }
 
             if (discordService.isEnabled()) {
@@ -357,11 +360,13 @@ public class UserService {
 
         if (request.getMinecraftNickname() != null
                 && !request.getMinecraftNickname().equals(user.getMinecraftNickname())) {
-            if (userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
+            if (!request.getMinecraftNickname().isBlank()
+                    && userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
                 throw new IllegalArgumentException("Minecraft никнейм уже используется");
             }
             changes.add("Minecraft Nick: " + user.getMinecraftNickname() + " -> " + request.getMinecraftNickname());
-            user.setMinecraftNickname(request.getMinecraftNickname());
+            user.setMinecraftNickname(request.getMinecraftNickname().isBlank() ? null
+                    : HtmlUtils.htmlEscape(request.getMinecraftNickname()));
         }
 
         if (Boolean.TRUE.equals(request.getUnlinkDiscord())) {
@@ -467,11 +472,12 @@ public class UserService {
             throw new IllegalArgumentException("Email уже используется");
         }
 
-        if (userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
+        if (request.getDiscordNickname() != null && !request.getDiscordNickname().isBlank()
+                && userRepository.existsByDiscordNickname(request.getDiscordNickname())) {
             throw new IllegalArgumentException("Discord никнейм уже используется");
         }
-
-        if (userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
+        if (request.getMinecraftNickname() != null && !request.getMinecraftNickname().isBlank()
+                && userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
             throw new IllegalArgumentException("Minecraft никнейм уже используется");
         }
 
@@ -479,9 +485,15 @@ public class UserService {
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setEmail(request.getEmail());
-        user.setDiscordNickname(request.getDiscordNickname());
-        user.setMinecraftNickname(request.getMinecraftNickname());
-        user.setBio(request.getBio());
+        user.setDiscordNickname(request.getDiscordNickname() != null && !request.getDiscordNickname().isBlank()
+                ? request.getDiscordNickname()
+                : null);
+        user.setMinecraftNickname(request.getMinecraftNickname() != null && !request.getMinecraftNickname().isBlank()
+                ? HtmlUtils.htmlEscape(request.getMinecraftNickname())
+                : null);
+        user.setBio(request.getBio() != null && !request.getBio().isBlank()
+                ? HtmlUtils.htmlEscape(request.getBio())
+                : null);
 
         if (request.getRole() != null) {
             try {
