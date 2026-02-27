@@ -31,17 +31,20 @@ public class AdminController {
     private final WarningService warningService;
     private final SiteSettingsService siteSettingsService;
     private final com.datapeice.slbackend.service.AuditLogService auditLogService;
+    private final com.datapeice.slbackend.service.TotpService totpService;
 
     public AdminController(ApplicationService applicationService, UserService userService,
             BadgeService badgeService, WarningService warningService,
             SiteSettingsService siteSettingsService,
-            com.datapeice.slbackend.service.AuditLogService auditLogService) {
+            com.datapeice.slbackend.service.AuditLogService auditLogService,
+            com.datapeice.slbackend.service.TotpService totpService) {
         this.applicationService = applicationService;
         this.userService = userService;
         this.badgeService = badgeService;
         this.warningService = warningService;
         this.siteSettingsService = siteSettingsService;
         this.auditLogService = auditLogService;
+        this.totpService = totpService;
     }
 
     @GetMapping("/applications")
@@ -79,7 +82,23 @@ public class AdminController {
 
     @PostMapping("/reset-season")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> resetSeason(@AuthenticationPrincipal User admin) {
+    public ResponseEntity<?> resetSeason(
+            @AuthenticationPrincipal User admin,
+            @RequestBody(required = false) ResetSeasonRequest request) {
+
+        if (admin.isTotpEnabled()) {
+            if (request == null || request.getTotpCode() == null || request.getTotpCode().isBlank()) {
+                return ResponseEntity.status(403).body(java.util.Map.of(
+                        "error", "TOTP_REQUIRED",
+                        "message", "Для этого действия требуется 2FA подтверждение"));
+            }
+            if (!totpService.verifyCode(admin.getTotpSecret(), request.getTotpCode())) {
+                return ResponseEntity.status(400).body(java.util.Map.of(
+                        "error", "INVALID_TOTP",
+                        "message", "Неверный код 2FA"));
+            }
+        }
+
         userService.resetAllUsersSeason(admin.getId(), admin.getUsername());
         return ResponseEntity.ok().body("{\"message\": \"Сезон успешно сброшен, все игроки могут подать заявки.\"}");
     }

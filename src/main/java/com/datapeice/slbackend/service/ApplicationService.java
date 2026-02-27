@@ -233,7 +233,11 @@ public class ApplicationService {
                                 "Комментарий от администрации: *" + reason + "*\n" +
                                 "\n**Администратор:** " + adminName + "\n" +
                                 "***С уважением, <:slteam:1244336090928906351>***");
+
+                // Remove @SL role if exists
+                discordService.removeSlRole(user.getDiscordUserId());
             }
+            user.setPlayer(false);
             user.setInSeason(true);
             userRepository.save(user);
         }
