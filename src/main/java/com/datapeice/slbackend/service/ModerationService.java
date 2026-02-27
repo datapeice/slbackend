@@ -46,7 +46,7 @@ public class ModerationService {
     @PostConstruct
     public void initBadWords() {
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(bannedWordsResource.getInputStream(), StandardCharsets.UTF_8) )) {
+                new InputStreamReader(bannedWordsResource.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim().toLowerCase();
@@ -59,7 +59,11 @@ public class ModerationService {
                             // списка,
                             // если хотим, но так как ниже есть умный паттерн, можно оставить как есть
                             bannedWords.add(word);
-                            bannedPatterns.add(createBannedPattern(word));
+                            // Создаем умный паттерн только для слов длиной от 4 символов,
+                            // чтобы избежать ложных срабатываний на союзах и предлогах.
+                            if (word.length() >= 4) {
+                                bannedPatterns.add(createBannedPattern(word));
+                            }
                         }
                     }
                 }
@@ -133,9 +137,26 @@ public class ModerationService {
 
         // 1. Простая проверка на вхождение оригинальных слов
         for (String banned : bannedWords) {
-            if (lowerText.contains(banned)) {
-                logger.warn("Content flagged: contains banned word '{}'", banned);
-                return true;
+            // Игнорируем слишком короткие слова (1-2 символа) во избежание ложных
+            // срабатываний
+            if (banned.length() <= 2)
+                continue;
+
+            if (banned.length() <= 5) {
+                // Короткие слова (3-5 символов) - проверяем только как отдельные слова
+                // Используем regex для проверки границ слов
+                String regex = "\\b" + Pattern.quote(banned) + "\\b";
+                if (Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CHARACTER_CLASS)
+                        .matcher(lowerText).find()) {
+                    logger.warn("Content flagged: contains short banned word '{}' as standalone", banned);
+                    return true;
+                }
+            } else {
+                // Длинные слова (>= 6) - проверяем как подстроку
+                if (lowerText.contains(banned)) {
+                    logger.warn("Content flagged: contains banned word '{}'", banned);
+                    return true;
+                }
             }
         }
 
