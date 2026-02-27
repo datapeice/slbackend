@@ -185,16 +185,15 @@ public class DiscordService {
                 event.getMessage().reply(MIMI_GIF_URL).queue();
                 return;
             }
+            String rawContent = event.getMessage().getContentRaw().toLowerCase();
+
             // @datapeice пасхалка
-            boolean datapeiceMentioned = event.getMessage().getMentions().getUsers().stream()
-                    .anyMatch(u -> u.getId().equals("861896140617809920"));
-            if (datapeiceMentioned) {
+            if (rawContent.contains("<@861896140617809920>") || rawContent.contains("<@!861896140617809920>")) {
                 event.getMessage().reply(DATAPEICE_IMAGE_URL).queue();
             }
+
             // @lendspele_ пасхалка
-            boolean lendspeleMentioned = event.getMessage().getMentions().getUsers().stream()
-                    .anyMatch(u -> u.getId().equals("881159130990129212"));
-            if (lendspeleMentioned) {
+            if (rawContent.contains("<@881159130990129212>") || rawContent.contains("<@!881159130990129212>")) {
                 event.getMessage().reply(ANGRY_PING).queue();
             }
             // Roxy/Migurdia пасхалка
