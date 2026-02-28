@@ -39,9 +39,9 @@ public class RconService {
                 log.error("Failed to authenticate to RCON server at {}:{}", ip, port);
             }
         } catch (IOException e) {
-            log.error("Error connecting to RCON server: {}", e.getMessage());
+            log.error("Error connecting to RCON server (IP: {}, Port: {}): ", ip, port, e);
         } catch (Exception e) {
-            log.error("Unexpected error executing RCON command: {}", e.getMessage(), e);
+            log.error("Unexpected error executing RCON command", e);
         }
         return false;
     }
