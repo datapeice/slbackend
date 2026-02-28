@@ -3,6 +3,7 @@ package com.datapeice.slbackend.service;
 import lombok.extern.slf4j.Slf4j;
 import nl.vv32.rcon.Rcon;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -46,6 +47,7 @@ public class RconService {
         return false;
     }
 
+    @Async
     public void addPlayerToWhitelist(String nickname) {
         if (nickname == null || nickname.trim().isEmpty()) {
             return;
@@ -53,6 +55,7 @@ public class RconService {
         sendCommand("easywhitelist add " + nickname);
     }
 
+    @Async
     public void removePlayerFromWhitelist(String nickname) {
         if (nickname == null || nickname.trim().isEmpty()) {
             return;
