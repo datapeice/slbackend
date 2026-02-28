@@ -35,6 +35,7 @@ public class UserService {
     private final ModerationService moderationService;
     private final ApplicationRepository applicationRepository;
     private final WarningRepository warningRepository;
+    private final RconService rconService;
 
     public UserService(UserRepository userRepository,
             AuditLogService auditLogService,
@@ -46,7 +47,8 @@ public class UserService {
             GeoIpService geoIpService,
             BCryptPasswordEncoder passwordEncoder,
             ApplicationRepository applicationRepository,
-            WarningRepository warningRepository) {
+            WarningRepository warningRepository,
+            RconService rconService) {
         this.userRepository = userRepository;
         this.auditLogService = auditLogService;
         this.discordService = discordService;
@@ -58,6 +60,7 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
         this.applicationRepository = applicationRepository;
         this.warningRepository = warningRepository;
+        this.rconService = rconService;
     }
 
     private SiteSettings getSiteSettings() {
@@ -205,6 +208,7 @@ public class UserService {
         user.setBanned(true);
         user.setBanReason(reason);
         user.setPlayer(false);
+        rconService.removePlayerFromWhitelist(user.getMinecraftNickname());
 
         // Resolve Discord user ID if needed
         if (user.getDiscordUserId() == null && discordService.isEnabled()) {
@@ -246,6 +250,7 @@ public class UserService {
         user.setBanned(false);
         user.setBanReason(null);
         user.setPlayer(true);
+        rconService.addPlayerToWhitelist(user.getMinecraftNickname());
 
         // Resolve Discord user ID if needed
         if (user.getDiscordUserId() == null && discordService.isEnabled()) {
@@ -403,6 +408,11 @@ public class UserService {
             if (wasPlayer != nowPlayer) {
                 changes.add("IsPlayer: " + wasPlayer + " -> " + nowPlayer);
                 user.setPlayer(nowPlayer);
+                if (nowPlayer) {
+                    rconService.addPlayerToWhitelist(user.getMinecraftNickname());
+                } else {
+                    rconService.removePlayerFromWhitelist(user.getMinecraftNickname());
+                }
 
                 // Sync @SL Discord role
                 if (discordService.isEnabled()) {
@@ -506,6 +516,9 @@ public class UserService {
         }
 
         user.setPlayer(request.getIsPlayer() != null ? request.getIsPlayer() : false);
+        if (user.isPlayer()) {
+            rconService.addPlayerToWhitelist(user.getMinecraftNickname());
+        }
         user.setEmailVerified(request.isEmailVerified());
 
         User saved = userRepository.save(user);

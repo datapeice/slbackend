@@ -35,10 +35,11 @@ public class ApplicationService {
 
     private final SiteSettingsService siteSettingsService;
     private final AuditLogService auditLogService;
+    private final RconService rconService;
 
     public ApplicationService(ApplicationRepository applicationRepository, RecaptchaService recaptchaService,
             UserRepository userRepository, EmailService emailService, DiscordService discordService,
-            SiteSettingsService siteSettingsService, AuditLogService auditLogService) {
+            SiteSettingsService siteSettingsService, AuditLogService auditLogService, RconService rconService) {
         this.applicationRepository = applicationRepository;
         this.recaptchaService = recaptchaService;
         this.userRepository = userRepository;
@@ -46,6 +47,7 @@ public class ApplicationService {
         this.discordService = discordService;
         this.siteSettingsService = siteSettingsService;
         this.auditLogService = auditLogService;
+        this.rconService = rconService;
     }
 
     @Transactional
@@ -215,6 +217,8 @@ public class ApplicationService {
                                 "**Удачной игры**\n" +
                                 "***С уважением, <:slteam:1244336090928906351>***");
             }
+            // Выполняем RCON команду
+            rconService.addPlayerToWhitelist(user.getMinecraftNickname());
         } else if (request.getStatus() == ApplicationStatus.REJECTED) {
             User user = application.getUser();
 
@@ -240,6 +244,9 @@ public class ApplicationService {
             user.setPlayer(false);
             user.setInSeason(true);
             userRepository.save(user);
+
+            // Выполняем RCON команду
+            rconService.removePlayerFromWhitelist(user.getMinecraftNickname());
         }
 
         Application updated = applicationRepository.save(application);
