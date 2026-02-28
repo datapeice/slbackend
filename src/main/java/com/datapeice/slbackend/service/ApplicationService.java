@@ -203,8 +203,11 @@ public class ApplicationService {
                         user.getDiscordNickname());
             }
 
-            // Send DM only — @SL role is managed ONLY via isPlayer in admin panel
             if (user.getDiscordUserId() != null) {
+                // Выдаем роль @SL при принятии заявки
+                discordService.assignSlRole(user.getDiscordUserId());
+
+                // Отправляем личное сообщение
                 discordService.sendDirectMessage(user.getDiscordUserId(),
                         "**Приветствую!**\n" +
                                 "Ваша заявка на вступление на сервер **StoryLegends** была принята!\n" +
