@@ -5,6 +5,7 @@ import com.datapeice.slbackend.dto.AdminUpdateUserRequest;
 import com.datapeice.slbackend.dto.BadgeResponse;
 import com.datapeice.slbackend.dto.UpdateUserRequest;
 import com.datapeice.slbackend.dto.UserResponse;
+import com.datapeice.slbackend.dto.PublicUserResponse;
 import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.entity.UserRole;
 import com.datapeice.slbackend.entity.SiteSettings;
@@ -184,13 +185,14 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserResponse> getAllUsers() {
+    public List<PublicUserResponse> getAllUsers() {
         // Возвращаем только пользователей с подтвержденным email И принятой заявкой
         // (isPlayer = true) И находящихся на сервере Discord
         return userRepository.findAll().stream()
                 .filter(User::isPlayer)
-                .map(this::mapToResponse)
-                .filter(UserResponse::isInDiscordServer)
+                .filter(u -> u.isInDiscord()
+                        || discordService.isMemberInGuildCached(u.getDiscordUserId(), u.getDiscordNickname()))
+                .map(this::mapToPublicResponse)
                 .collect(Collectors.toList());
     }
 
@@ -601,6 +603,33 @@ public class UserService {
 
     private UserResponse mapToResponse(User user) {
         return mapToResponse(user, false);
+    }
+
+    private PublicUserResponse mapToPublicResponse(User user) {
+        PublicUserResponse response = new PublicUserResponse();
+        response.setId(user.getId());
+        response.setUsername(user.getUsername());
+        response.setDiscordNickname(user.getDiscordNickname());
+        response.setMinecraftNickname(user.getMinecraftNickname());
+        response.setRole(user.getRole());
+        response.setAvatarUrl(resolveAvatarUrl(user.getAvatarUrl(), user.getUsername()));
+        response.setBio(user.getBio());
+
+        if (user.getBadges() != null) {
+            List<BadgeResponse> badges = user.getBadges().stream()
+                    .map(b -> {
+                        BadgeResponse br = new BadgeResponse();
+                        br.setId(b.getId());
+                        br.setName(b.getName());
+                        br.setColor(b.getColor());
+                        br.setSvgIcon(b.getSvgIcon());
+                        return br;
+                    })
+                    .collect(Collectors.toList());
+            response.setBadges(badges);
+        }
+
+        return response;
     }
 
     public UserResponse getUserById(Long userId) {

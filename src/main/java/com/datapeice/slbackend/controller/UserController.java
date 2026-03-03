@@ -2,6 +2,7 @@ package com.datapeice.slbackend.controller;
 
 import com.datapeice.slbackend.dto.UpdateUserRequest;
 import com.datapeice.slbackend.dto.UserResponse;
+import com.datapeice.slbackend.dto.PublicUserResponse;
 import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.service.UserService;
 import jakarta.validation.Valid;
@@ -42,7 +43,7 @@ public class UserController {
     }
 
     @GetMapping
-    public ResponseEntity<List<UserResponse>> getAllUsers() {
+    public ResponseEntity<List<PublicUserResponse>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 }
