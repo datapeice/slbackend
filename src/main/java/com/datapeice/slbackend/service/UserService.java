@@ -199,7 +199,18 @@ public class UserService {
     @Transactional(readOnly = true)
     public Page<UserResponse> getAllUsersForAdmin(Pageable pageable) {
         return userRepository.findAll(pageable)
-                .map(u -> mapToResponse(u, true));
+                .map(u -> {
+                    UserResponse r = mapToResponse(u, false);
+                    r.setBio(null);
+                    r.setEmail(u.getEmail());
+                    return r;
+                });
+    }
+
+    public UserResponse getUserByIdForAdmin(Long userId) {
+        return userRepository.findById(userId)
+                .map(u -> mapToResponse(u, true))
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
     }
 
     @Transactional
@@ -630,6 +641,12 @@ public class UserService {
         }
 
         return response;
+    }
+
+    public PublicUserResponse getPublicUser(Long userId) {
+        return userRepository.findById(userId)
+                .map(this::mapToPublicResponse)
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
     }
 
     public UserResponse getUserById(Long userId) {

@@ -66,6 +66,11 @@ public class AdminController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/applications/{id}")
+    public ResponseEntity<ApplicationResponse> getApplicationById(@PathVariable Long id) {
+        return ResponseEntity.ok(applicationService.getApplicationById(id));
+    }
+
     @PatchMapping("/applications/{id}/status")
     public ResponseEntity<?> updateApplicationStatus(
             @PathVariable Long id,
@@ -111,6 +116,11 @@ public class AdminController {
         // Sort by id descending (newest first)
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
         return ResponseEntity.ok(userService.getAllUsersForAdmin(pageable));
+    }
+
+    @GetMapping("/users/{id}")
+    public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getUserByIdForAdmin(id));
     }
 
     @PostMapping("/users/{id}/ban")

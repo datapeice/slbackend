@@ -166,12 +166,18 @@ public class ApplicationService {
 
     public Page<ApplicationResponse> getAllApplications(Pageable pageable) {
         return applicationRepository.findAll(pageable)
-                .map(this::mapToResponse);
+                .map(this::mapToSummaryResponse);
     }
 
     public Page<ApplicationResponse> getApplicationsByStatus(ApplicationStatus status, Pageable pageable) {
         return applicationRepository.findAllByStatus(status, pageable)
-                .map(this::mapToResponse);
+                .map(this::mapToSummaryResponse);
+    }
+
+    public ApplicationResponse getApplicationById(Long id) {
+        return applicationRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена"));
     }
 
     @Transactional
@@ -282,6 +288,15 @@ public class ApplicationService {
         userSummary.setAvatarUrl(application.getUser().getAvatarUrl());
         response.setUser(userSummary);
 
+        return response;
+    }
+
+    private ApplicationResponse mapToSummaryResponse(Application application) {
+        ApplicationResponse response = mapToResponse(application);
+        response.setWhyUs(null);
+        response.setSource(null);
+        response.setAdditionalInfo(null);
+        response.setAdminComment(null);
         return response;
     }
 }
