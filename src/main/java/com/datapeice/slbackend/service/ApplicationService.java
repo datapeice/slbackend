@@ -286,6 +286,10 @@ public class ApplicationService {
         userSummary.setDiscordNickname(application.getUser().getDiscordNickname());
         userSummary.setMinecraftNickname(application.getUser().getMinecraftNickname());
         userSummary.setAvatarUrl(application.getUser().getAvatarUrl());
+        userSummary.setDiscordVerified(application.getUser().isDiscordVerified());
+        userSummary.setInDiscordServer(application.getUser().isInDiscord() ||
+                discordService.isMemberInGuildCached(application.getUser().getDiscordUserId(),
+                        application.getUser().getDiscordNickname()));
         response.setUser(userSummary);
 
         return response;

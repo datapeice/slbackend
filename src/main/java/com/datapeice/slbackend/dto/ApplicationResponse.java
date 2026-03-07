@@ -27,5 +27,7 @@ public class ApplicationResponse {
         private String discordNickname;
         private String minecraftNickname;
         private String avatarUrl;
+        private boolean discordVerified;
+        private boolean inDiscordServer;
     }
 }
