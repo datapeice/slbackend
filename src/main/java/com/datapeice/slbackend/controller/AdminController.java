@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -93,12 +94,12 @@ public class AdminController {
 
         if (admin.isTotpEnabled()) {
             if (request == null || request.getTotpCode() == null || request.getTotpCode().isBlank()) {
-                return ResponseEntity.status(403).body(java.util.Map.of(
+                return ResponseEntity.status(403).body(Map.of(
                         "error", "TOTP_REQUIRED",
                         "message", "Для этого действия требуется 2FA подтверждение"));
             }
             if (!totpService.verifyCode(admin.getTotpSecret(), request.getTotpCode())) {
-                return ResponseEntity.status(400).body(java.util.Map.of(
+                return ResponseEntity.status(400).body(Map.of(
                         "error", "INVALID_TOTP",
                         "message", "Неверный код 2FA"));
             }

@@ -19,8 +19,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 public class ApplicationService {
@@ -53,6 +51,12 @@ public class ApplicationService {
     @Transactional
     public ApplicationResponse createApplication(User user, CreateApplicationRequest request) {
         logger.info("Application creation attempt by user: {}", user.getUsername());
+
+
+        if (!siteSettingsService.getSettings().isApplicationsOpen()) {
+            logger.warn("User {} tried to create application while applications are closed", user.getUsername());
+            throw new IllegalStateException("Прием заявок в данный момент закрыт. Пожалуйста, следите за новостями.");
+        }
 
         // Проверяем не забанен ли пользователь
         if (user.isBanned()) {
