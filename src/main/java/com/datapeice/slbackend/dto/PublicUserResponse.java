@@ -15,5 +15,6 @@ public class PublicUserResponse {
     private String avatarUrl;
     private String bio;
     private List<BadgeResponse> badges;
+    @JsonProperty("isBoosted")
     private boolean isBoosted;
 }

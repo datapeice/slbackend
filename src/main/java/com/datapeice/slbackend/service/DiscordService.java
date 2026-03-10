@@ -38,6 +38,7 @@ import jakarta.annotation.PreDestroy;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class DiscordService {
@@ -318,10 +319,39 @@ public class DiscordService {
                     .build();
             jda.awaitReady();
             logger.info("Discord bot started successfully. Guilds: {}", jda.getGuilds().size());
+            syncAllBoostStatuses();
         } catch (Exception e) {
             logger.error("Failed to start Discord bot: {}", e.getMessage());
             jda = null;
         }
+    }
+
+    private void syncAllBoostStatuses() {
+        Guild guild = jda.getGuildById(guildId);
+        if (guild == null) return;
+
+        guild.loadMembers().onSuccess(members -> {
+            Set<String> boostingDiscordIds = members.stream()
+                    .filter(m -> m.getTimeBoosted() != null)
+                    .map(net.dv8tion.jda.api.entities.Member::getId)
+                    .collect(Collectors.toSet());
+
+            List<com.datapeice.slbackend.entity.User> allUsers = userRepository.findAll();
+            int updatedCount = 0;
+            for (com.datapeice.slbackend.entity.User user : allUsers) {
+                if (user.getDiscordUserId() != null) {
+                    boolean isBoosting = boostingDiscordIds.contains(user.getDiscordUserId());
+                    if (user.isBoosted() != isBoosting) {
+                        user.setBoosted(isBoosting);
+                        userRepository.save(user);
+                        updatedCount++;
+                    }
+                }
+            }
+            logger.info("Startup sync finished: found {} boosting members, updated {} user records", boostingDiscordIds.size(), updatedCount);
+        }).onError(err -> {
+            logger.error("Failed to load members for syncAllBoostStatuses: {}", err.getMessage());
+        });
     }
 
     @PreDestroy

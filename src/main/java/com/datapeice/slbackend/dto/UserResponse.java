@@ -26,6 +26,7 @@ public class UserResponse {
     private String discordUserId;
     private boolean discordVerified;
     private boolean inDiscordServer;
+    @JsonProperty("isBoosted")
     private boolean isBoosted;
 
     // Badges (without @SL role)
