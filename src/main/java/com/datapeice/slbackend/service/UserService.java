@@ -653,6 +653,8 @@ public class UserService {
             response.setBadges(badges);
         }
 
+        response.setBoosted(user.isBoosted());
+
         return response;
     }
 
@@ -760,6 +762,8 @@ public class UserService {
             response.setLastLoginIp2(user.getLastLoginIp2());
             response.setLastLoginUserAgent2(user.getLastLoginUserAgent2());
         }
+
+        response.setBoosted(user.isBoosted());
 
         return response;
     }
