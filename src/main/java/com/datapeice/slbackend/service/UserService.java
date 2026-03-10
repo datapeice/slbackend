@@ -103,6 +103,19 @@ public class UserService {
     }
 
     @Transactional
+    public void syncDiscordBoostStatusForUser(User user) {
+        if (user.getDiscordUserId() == null || !discordService.isEnabled())
+            return;
+        boolean isBoosting = discordService.isMemberBoosting(user.getDiscordUserId());
+        if (user.isBoosted() != isBoosting) {
+            user.setBoosted(isBoosting);
+            userRepository.save(user);
+            auditLogService.logAction(user.getId(), user.getUsername(), "USER_UPDATE_BOOST",
+                    "Синхронизировал статус буста Discord (" + isBoosting + ")", user.getId(), user.getUsername());
+        }
+    }
+
+    @Transactional
     public UserResponse updateUserProfile(User user, UpdateUserRequest request) {
         // Если request null - обновляем только то что уже изменено в user (например
         // аватар)
@@ -775,6 +788,8 @@ public class UserService {
                     user.setAvatarUrl(avatarUrl);
                 }
             }
+
+            syncDiscordBoostStatusForUser(user);
 
             userRepository.save(user);
 

@@ -15,4 +15,5 @@ public class PublicUserResponse {
     private String avatarUrl;
     private String bio;
     private List<BadgeResponse> badges;
+    private boolean isBoosted;
 }

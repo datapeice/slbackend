@@ -43,6 +43,9 @@ public class User implements UserDetails {
 
     private boolean inSeason = false;
 
+    private boolean isBoosted = false;
+
+
     private String banReason;
 
     // Email verification

@@ -8,15 +8,23 @@ import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
+import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
+import net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent;
+import net.dv8tion.jda.api.events.guild.member.update.GuildMemberUpdateAvatarEvent;
+import net.dv8tion.jda.api.events.guild.member.update.GuildMemberUpdateBoostTimeEvent;
+import net.dv8tion.jda.api.events.guild.member.update.GuildMemberUpdateNicknameEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+import net.dv8tion.jda.api.events.user.update.UserUpdateAvatarEvent;
 import net.dv8tion.jda.api.events.user.update.UserUpdateGlobalNameEvent;
 import net.dv8tion.jda.api.events.user.update.UserUpdateNameEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
+import nl.vv32.rcon.Rcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -55,15 +63,15 @@ public class DiscordService {
 
     private final FileStorageService fileStorageService;
     private final UserRepository userRepository;
-    private final org.springframework.context.ApplicationContext applicationContext;
     private final AuditLogService auditLogService;
+    private final RconService rconService;
 
-    public DiscordService(FileStorageService fileStorageService, UserRepository userRepository,
-            org.springframework.context.ApplicationContext applicationContext, AuditLogService auditLogService) {
+    public DiscordService(FileStorageService fileStorageService, UserRepository userRepository, AuditLogService auditLogService,
+                          RconService rconService) {
         this.fileStorageService = fileStorageService;
         this.userRepository = userRepository;
-        this.applicationContext = applicationContext;
         this.auditLogService = auditLogService;
+        this.rconService = rconService;
     }
 
     private static final String MIMI_GIF_URL = "https://tenor.com/view/mimi-typh-heart-sit-mimi-the-dog-gif-13978401409055125823";
@@ -123,7 +131,7 @@ public class DiscordService {
         }
 
         @Override
-        public void onUserUpdateAvatar(net.dv8tion.jda.api.events.user.update.UserUpdateAvatarEvent event) {
+        public void onUserUpdateAvatar(UserUpdateAvatarEvent event) {
             String discordUserId = event.getUser().getId();
             try {
                 userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
@@ -140,8 +148,7 @@ public class DiscordService {
         }
 
         @Override
-        public void onGuildMemberUpdateNickname(
-                net.dv8tion.jda.api.events.guild.member.update.GuildMemberUpdateNicknameEvent event) {
+        public void onGuildMemberUpdateNickname(GuildMemberUpdateNicknameEvent event) {
             if (event.getGuild().getId().equals(guildId)) {
                 String discordUserId = event.getUser().getId();
                 String newNickname = event.getNewNickname();
@@ -153,8 +160,7 @@ public class DiscordService {
         }
 
         @Override
-        public void onGuildMemberUpdateAvatar(
-                net.dv8tion.jda.api.events.guild.member.update.GuildMemberUpdateAvatarEvent event) {
+        public void onGuildMemberUpdateAvatar(GuildMemberUpdateAvatarEvent event) {
             if (event.getGuild().getId().equals(guildId)) {
                 String discordUserId = event.getUser().getId();
                 try {
@@ -176,7 +182,7 @@ public class DiscordService {
 
     private class MessageListener extends ListenerAdapter {
         @Override
-        public void onMessageReceived(net.dv8tion.jda.api.events.message.MessageReceivedEvent event) {
+        public void onMessageReceived(MessageReceivedEvent event) {
             if (event.getAuthor().isBot())
                 return;
             String content = event.getMessage().getContentDisplay().toLowerCase();
@@ -213,7 +219,7 @@ public class DiscordService {
 
     private class MemberLeaveListener extends ListenerAdapter {
         @Override
-        public void onGuildMemberRemove(net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent event) {
+        public void onGuildMemberRemove(GuildMemberRemoveEvent event) {
             if (event.getGuild().getId().equals(guildId)) {
                 String discordUserId = event.getUser().getId();
                 try {
@@ -225,9 +231,10 @@ public class DiscordService {
                         // user.setPlayer(false); нафиг надо, потому что человек может вернуться в
                         // дискорд и он вернет статус игрока, а так с так был бы дополнительный геморой
                         // админам
+                        // TODO добавить удаление игрока с whitelist через rcon
+                        rconService.removePlayerFromWhitelist(user.getMinecraftNickname());
                         userRepository.save(user);
                         try {
-                            AuditLogService auditLogService = applicationContext.getBean(AuditLogService.class);
                             auditLogService.logAction(user.getId(), user.getUsername(), "DISCORD_LEAVE",
                                     "Покинул сервер Discord", user.getId(), user.getUsername());
                         } catch (Exception auditEx) {
@@ -246,19 +253,43 @@ public class DiscordService {
 
     private class MemberJoinListener extends ListenerAdapter {
         @Override
-        public void onGuildMemberJoin(net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent event) {
+        public void onGuildMemberJoin(GuildMemberJoinEvent event) {
             if (event.getGuild().getId().equals(guildId)) {
                 String discordUserId = event.getUser().getId();
                 try {
                     userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
                         user.setInDiscord(true);
                         userRepository.save(user);
+                        if (!user.isPlayer()) {
+                            rconService.addPlayerToWhitelist(user.getMinecraftNickname());
+                        }
                         logger.info("Discord user {} joined the guild. Updated inDiscord to true for user {}",
                                 discordUserId, user.getUsername());
                     });
                 } catch (Exception e) {
                     logger.error("Failed to handle guild member join for discordUserId={}: {}", discordUserId,
                             e.getMessage());
+                }
+            }
+        }
+    }
+
+    private class MemberBoostListener extends ListenerAdapter {
+        @Override
+        public void onGuildMemberUpdateBoostTime(GuildMemberUpdateBoostTimeEvent event) {
+            if (event.getGuild().getId().equals(guildId)) {
+                String discordUserId = event.getUser().getId();
+                boolean isBoosting = event.getNewTimeBoosted() != null;
+                try {
+                    userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
+                        if (user.isBoosted() != isBoosting) {
+                            user.setBoosted(isBoosting);
+                            userRepository.save(user);
+                            logger.info("Discord user {} boost status updated to {} via event", discordUserId, isBoosting);
+                        }
+                    });
+                } catch (Exception e) {
+                    logger.error("Failed to handle guild member boost update for discordUserId={}: {}", discordUserId, e.getMessage());
                 }
             }
         }
@@ -283,6 +314,7 @@ public class DiscordService {
                     .addEventListeners(new MessageListener())
                     .addEventListeners(new MemberJoinListener())
                     .addEventListeners(new MemberLeaveListener())
+                    .addEventListeners(new MemberBoostListener())
                     .build();
             jda.awaitReady();
             logger.info("Discord bot started successfully. Guilds: {}", jda.getGuilds().size());
@@ -387,6 +419,30 @@ public class DiscordService {
             }
         } catch (Exception e) {
             return false;
+        }
+        return false;
+    }
+
+    /**
+     * Check if a member is currently boosting the guild.
+     */
+    public boolean isMemberBoosting(String discordUserId) {
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank()) {
+            return false;
+        }
+        try {
+            Guild guild = jda.getGuildById(guildId);
+            if (guild != null) {
+                net.dv8tion.jda.api.entities.Member member = guild.getMemberById(discordUserId);
+                if (member == null) {
+                    member = guild.retrieveMemberById(discordUserId).complete();
+                }
+                if (member != null) {
+                    return member.getTimeBoosted() != null;
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Failed to check if member {} is boosting: {}", discordUserId, e.getMessage());
         }
         return false;
     }
