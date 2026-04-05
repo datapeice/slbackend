@@ -17,6 +17,20 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
 
     Page<Application> findAllByStatus(ApplicationStatus status, Pageable pageable);
 
+    long countByStatus(ApplicationStatus status);
+
+    @org.springframework.data.jpa.repository.Query("SELECT a FROM Application a WHERE " +
+            "(:status IS NULL OR a.status = :status) AND " +
+            "(CAST(a.id AS string) LIKE %:query% OR " +
+            "LOWER(a.firstName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+            "CAST(a.age AS string) LIKE %:query% OR " +
+            "LOWER(a.user.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+            "LOWER(a.user.minecraftNickname) LIKE LOWER(CONCAT('%', :query, '%')))")
+    Page<Application> findBySearch(
+            @org.springframework.data.repository.query.Param("status") ApplicationStatus status,
+            @org.springframework.data.repository.query.Param("query") String query,
+            Pageable pageable);
+
     List<Application> findAllByUserIdAndStatus(Long userId, ApplicationStatus status);
 
     void deleteAllByUserId(Long userId);

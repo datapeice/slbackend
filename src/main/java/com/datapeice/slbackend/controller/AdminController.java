@@ -51,6 +51,7 @@ public class AdminController {
     @GetMapping("/applications")
     public ResponseEntity<Page<ApplicationResponse>> getAllApplications(
             @RequestParam(required = false) ApplicationStatus status,
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             @AuthenticationPrincipal User admin) {
@@ -60,9 +61,9 @@ public class AdminController {
 
         Page<ApplicationResponse> result;
         if (status != null) {
-            result = applicationService.getApplicationsByStatus(status, pageable);
+            result = applicationService.getApplicationsByStatus(status, query, pageable);
         } else {
-            result = applicationService.getAllApplications(pageable);
+            result = applicationService.getAllApplications(query, pageable);
         }
         return ResponseEntity.ok(result);
     }
@@ -109,14 +110,27 @@ public class AdminController {
         return ResponseEntity.ok().body("{\"message\": \"Сезон успешно сброшен, все игроки могут подать заявки.\"}");
     }
 
+    @GetMapping("/stats")
+    public ResponseEntity<AdminDashboardStatsResponse> getDashboardStats() {
+        AdminDashboardStatsResponse stats = new AdminDashboardStatsResponse(
+            userService.getTotalUsersCount(),
+            applicationService.countApplicationsByStatus(ApplicationStatus.PENDING),
+            userService.countActivePlayers(),
+            userService.countBannedUsers()
+        );
+        return ResponseEntity.ok(stats);
+    }
+
     @GetMapping("/users")
     public ResponseEntity<Page<UserResponse>> getAllUsers(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) String role,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
 
         // Sort by id descending (newest first)
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-        return ResponseEntity.ok(userService.getAllUsersForAdmin(pageable));
+        return ResponseEntity.ok(userService.getAllUsersForAdmin(query, role, pageable));
     }
 
     @GetMapping("/users/{id}")

@@ -168,14 +168,26 @@ public class ApplicationService {
         return result;
     }
 
-    public Page<ApplicationResponse> getAllApplications(Pageable pageable) {
+    public Page<ApplicationResponse> getAllApplications(String query, Pageable pageable) {
+        if (query != null && !query.isBlank()) {
+            return applicationRepository.findBySearch(null, query, pageable)
+                    .map(this::mapToSummaryResponse);
+        }
         return applicationRepository.findAll(pageable)
                 .map(this::mapToSummaryResponse);
     }
 
-    public Page<ApplicationResponse> getApplicationsByStatus(ApplicationStatus status, Pageable pageable) {
+    public Page<ApplicationResponse> getApplicationsByStatus(ApplicationStatus status, String query, Pageable pageable) {
+        if (query != null && !query.isBlank()) {
+            return applicationRepository.findBySearch(status, query, pageable)
+                    .map(this::mapToSummaryResponse);
+        }
         return applicationRepository.findAllByStatus(status, pageable)
                 .map(this::mapToSummaryResponse);
+    }
+
+    public long countApplicationsByStatus(ApplicationStatus status) {
+        return applicationRepository.countByStatus(status);
     }
 
     public ApplicationResponse getApplicationById(Long id) {

@@ -2,6 +2,8 @@ package com.datapeice.slbackend.repository;
 
 import com.datapeice.slbackend.entity.Badge;
 import com.datapeice.slbackend.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -32,9 +34,25 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByDiscordUserId(String discordUserId);
 
-    List<User> findAllByBadgesContaining(Badge badge);
+    Page<User> findAll(Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE " +
+            "(LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+            "LOWER(u.discordNickname) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+            "LOWER(u.minecraftNickname) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+            "AND (:role IS NULL OR u.role = :role)")
+    org.springframework.data.domain.Page<User> findBySearch(
+            @org.springframework.data.repository.query.Param("query") String query,
+            @org.springframework.data.repository.query.Param("role") com.datapeice.slbackend.entity.UserRole role,
+            org.springframework.data.domain.Pageable pageable);
 
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("UPDATE User u SET u.inSeason = false")
     void resetSeasonForAll();
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(u) FROM User u WHERE u.isPlayer = true")
+    long countActivePlayers();
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(u) FROM User u WHERE u.banned = true")
+    long countBannedUsers();
 }

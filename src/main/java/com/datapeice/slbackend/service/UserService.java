@@ -210,14 +210,41 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UserResponse> getAllUsersForAdmin(Pageable pageable) {
-        return userRepository.findAll(pageable)
-                .map(u -> {
-                    UserResponse r = mapToResponse(u, false);
-                    r.setBio(null);
-                    r.setEmail(u.getEmail());
-                    return r;
-                });
+    public Page<UserResponse> getAllUsersForAdmin(String query, String role, Pageable pageable) {
+        UserRole userRole = null;
+        if (role != null && !role.isBlank()) {
+            try {
+                userRole = UserRole.valueOf(role);
+            } catch (IllegalArgumentException ignored) {}
+        }
+
+        Page<User> users;
+        if (query != null && !query.isBlank()) {
+            users = userRepository.findBySearch(query, userRole, pageable);
+        } else if (userRole != null) {
+            users = userRepository.findBySearch("", userRole, pageable);
+        } else {
+            users = userRepository.findAll(pageable);
+        }
+
+        return users.map(u -> {
+            UserResponse r = mapToResponse(u, false);
+            r.setBio(null);
+            r.setEmail(u.getEmail());
+            return r;
+        });
+    }
+
+    public long getTotalUsersCount() {
+        return userRepository.count();
+    }
+
+    public long countActivePlayers() {
+        return userRepository.countActivePlayers();
+    }
+
+    public long countBannedUsers() {
+        return userRepository.countBannedUsers();
     }
 
     public UserResponse getUserByIdForAdmin(Long userId) {
