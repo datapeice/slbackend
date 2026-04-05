@@ -55,4 +55,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @org.springframework.data.jpa.repository.Query("SELECT COUNT(u) FROM User u WHERE u.banned = true")
     long countBannedUsers();
+
+    java.util.List<User> findAllByBadgesContaining(Badge badge);
 }
