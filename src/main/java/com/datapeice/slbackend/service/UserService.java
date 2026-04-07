@@ -258,9 +258,12 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
+        String normalizedReason = (reason == null || reason.isBlank()) ? "Причина не указана" : reason.trim();
+
         user.setBanned(true);
-        user.setBanReason(reason);
+        user.setBanReason(normalizedReason);
         user.setPlayer(false);
+        rconService.kickPlayerWithBanMessage(user.getMinecraftNickname(), normalizedReason);
         rconService.removePlayerFromWhitelist(user.getMinecraftNickname());
 
         // Resolve Discord user ID if needed
@@ -277,7 +280,7 @@ public class UserService {
             discordService.removeSlRole(user.getDiscordUserId());
             discordService.sendDirectMessage(user.getDiscordUserId(),
                     "🚫 **StoryLegends** — Ваш аккаунт был **заблокирован** администрацией.\n" +
-                            "**Причина:** " + (reason != null ? reason : "Причина не указана") + "\n" +
+                            "**Причина:** " + normalizedReason + "\n" +
                             "**Модератор:** " + adminName + "\n" +
                             "***С уважением, <:slteam:1244336090928906351>***");
         } else if (!settings.isSendDiscordDmOnBan() && user.getDiscordUserId() != null && discordService.isEnabled()) {
@@ -286,10 +289,11 @@ public class UserService {
         }
 
         if (settings.isSendEmailOnBan()) {
-            emailService.sendBanEmail(user.getEmail(), user.getUsername(), reason);
+            emailService.sendBanEmail(user.getEmail(), user.getUsername(), normalizedReason);
         }
 
-        auditLogService.logAction(adminId, adminName, "ADMIN_BAN_USER", "Забанил пользователя. Причина: " + reason,
+        auditLogService.logAction(adminId, adminName, "ADMIN_BAN_USER",
+                "Забанил пользователя. Причина: " + normalizedReason,
                 user.getId(), user.getUsername());
 
         return mapToResponse(updated);

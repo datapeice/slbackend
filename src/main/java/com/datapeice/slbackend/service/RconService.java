@@ -62,4 +62,17 @@ public class RconService {
         }
         sendCommand("easywhitelist remove " + nickname);
     }
+
+    @Async
+    public void kickPlayerWithBanMessage(String nickname, String reason) {
+        if (nickname == null || nickname.trim().isEmpty()) {
+            return;
+        }
+
+        String normalizedReason = (reason == null || reason.trim().isEmpty())
+                ? "Причина не указана"
+                : reason.replace("\r", " ").replace("\n", " ").trim();
+
+        sendCommand("kick " + nickname + " Вы забанены! Причина: " + normalizedReason);
+    }
 }
