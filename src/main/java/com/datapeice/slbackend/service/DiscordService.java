@@ -7,7 +7,6 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
-import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent;
 import net.dv8tion.jda.api.events.guild.member.update.GuildMemberUpdateAvatarEvent;
@@ -20,11 +19,9 @@ import net.dv8tion.jda.api.events.user.update.UserUpdateNameEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
-import nl.vv32.rcon.Rcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -349,9 +346,7 @@ public class DiscordService {
                 }
             }
             logger.info("Startup sync finished: found {} boosting members, updated {} user records", boostingDiscordIds.size(), updatedCount);
-        }).onError(err -> {
-            logger.error("Failed to load members for syncAllBoostStatuses: {}", err.getMessage());
-        });
+        }).onError(err -> logger.error("Failed to load members for syncAllBoostStatuses: {}", err.getMessage()));
     }
 
     @PreDestroy
@@ -515,13 +510,9 @@ public class DiscordService {
         if (!isEnabled() || discordUserId == null || discordUserId.isBlank())
             return;
         try {
-            jda.retrieveUserById(discordUserId).queue(user -> {
-                user.openPrivateChannel().queue(channel -> {
-                    channel.sendMessage(message).queue(
-                            success -> logger.info("DM sent to Discord user: {}", discordUserId),
-                            error -> logger.error("Failed to send DM to {}: {}", discordUserId, error.getMessage()));
-                });
-            }, error -> logger.error("Failed to find Discord user {}: {}", discordUserId, error.getMessage()));
+            jda.retrieveUserById(discordUserId).queue(user -> user.openPrivateChannel().queue(channel -> channel.sendMessage(message).queue(
+                    success -> logger.info("DM sent to Discord user: {}", discordUserId),
+                    error -> logger.error("Failed to send DM to {}: {}", discordUserId, error.getMessage()))), error -> logger.error("Failed to find Discord user {}: {}", discordUserId, error.getMessage()));
         } catch (Exception e) {
             logger.error("Error sending DM to {}: {}", discordUserId, e.getMessage());
         }
@@ -570,11 +561,9 @@ public class DiscordService {
             logger.error("SL role not found: {}", slRoleId);
             return;
         }
-        guild.retrieveMemberById(discordUserId).queue(member -> {
-            guild.addRoleToMember(member, role).queue(
-                    success -> logger.info("SL role assigned to {}", discordUserId),
-                    error -> logger.error("Failed to assign SL role to {}: {}", discordUserId, error.getMessage()));
-        }, error -> logger.error("Member not found: {}", discordUserId));
+        guild.retrieveMemberById(discordUserId).queue(member -> guild.addRoleToMember(member, role).queue(
+                success -> logger.info("SL role assigned to {}", discordUserId),
+                error -> logger.error("Failed to assign SL role to {}: {}", discordUserId, error.getMessage())), error -> logger.error("Member not found: {}", discordUserId));
     }
 
     /**
@@ -589,11 +578,9 @@ public class DiscordService {
         Role role = guild.getRoleById(slRoleId);
         if (role == null)
             return;
-        guild.retrieveMemberById(discordUserId).queue(member -> {
-            guild.removeRoleFromMember(member, role).queue(
-                    success -> logger.info("SL role removed from {}", discordUserId),
-                    error -> logger.error("Failed to remove SL role from {}: {}", discordUserId, error.getMessage()));
-        }, error -> logger.warn("Member not found for role removal: {}", discordUserId));
+        guild.retrieveMemberById(discordUserId).queue(member -> guild.removeRoleFromMember(member, role).queue(
+                success -> logger.info("SL role removed from {}", discordUserId),
+                error -> logger.error("Failed to remove SL role from {}: {}", discordUserId, error.getMessage())), error -> logger.warn("Member not found for role removal: {}", discordUserId));
     }
 
     /**
@@ -610,12 +597,10 @@ public class DiscordService {
             logger.error("Role not found: {}", roleId);
             return;
         }
-        guild.retrieveMemberById(discordUserId).queue(member -> {
-            guild.addRoleToMember(member, role).queue(
-                    success -> logger.info("Role {} assigned to {}", roleId, discordUserId),
-                    error -> logger.error("Failed to assign role {} to {}: {}", roleId, discordUserId,
-                            error.getMessage()));
-        }, error -> logger.warn("Member not found: {}", discordUserId));
+        guild.retrieveMemberById(discordUserId).queue(member -> guild.addRoleToMember(member, role).queue(
+                success -> logger.info("Role {} assigned to {}", roleId, discordUserId),
+                error -> logger.error("Failed to assign role {} to {}: {}", roleId, discordUserId,
+                        error.getMessage())), error -> logger.warn("Member not found: {}", discordUserId));
     }
 
     /**
@@ -630,12 +615,10 @@ public class DiscordService {
         Role role = guild.getRoleById(roleId);
         if (role == null)
             return;
-        guild.retrieveMemberById(discordUserId).queue(member -> {
-            guild.removeRoleFromMember(member, role).queue(
-                    success -> logger.info("Role {} removed from {}", roleId, discordUserId),
-                    error -> logger.error("Failed to remove role {} from {}: {}", roleId, discordUserId,
-                            error.getMessage()));
-        }, error -> logger.warn("Member not found: {}", discordUserId));
+        guild.retrieveMemberById(discordUserId).queue(member -> guild.removeRoleFromMember(member, role).queue(
+                success -> logger.info("Role {} removed from {}", roleId, discordUserId),
+                error -> logger.error("Failed to remove role {} from {}: {}", roleId, discordUserId,
+                        error.getMessage())), error -> logger.warn("Member not found: {}", discordUserId));
     }
 
     /**

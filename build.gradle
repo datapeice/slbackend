@@ -62,7 +62,7 @@ dependencies {
     implementation 'net.dv8tion:JDA:5.2.1'
 
     // RCON Client for Minecraft
-    implementation 'nl.vv32.rcon:rcon:1.2.0'
+    implementation 'xin.vanilla.rcon:rcon:1.2.1'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'

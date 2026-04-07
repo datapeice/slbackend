@@ -1,12 +1,13 @@
 package com.datapeice.slbackend.service;
 
 import lombok.extern.slf4j.Slf4j;
-import nl.vv32.rcon.Rcon;
+import xin.vanilla.rcon.Rcon;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Service
 @Slf4j
@@ -31,7 +32,7 @@ public class RconService {
         }
 
         log.info("Sending RCON command: {}", command);
-        try (Rcon rcon = Rcon.open(ip, port)) {
+        try (Rcon rcon = Rcon.open(ip, port, java.nio.charset.StandardCharsets.UTF_8)) {
             if (rcon.authenticate(password)) {
                 String result = rcon.sendCommand(command);
                 log.info("RCON command result: {}", result);
