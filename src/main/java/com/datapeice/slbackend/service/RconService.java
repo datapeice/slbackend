@@ -73,6 +73,30 @@ public class RconService {
                 ? "Причина не указана"
                 : reason.replace("\r", " ").replace("\n", " ").trim();
 
-        sendCommand("kick " + nickname + " Вы забанены! Причина: " + normalizedReason);
+        String message = "Вы забанены!\nПричина: " + normalizedReason;
+        String jsonMessage = "{\"text\":\"" + toAsciiJson(message) + "\"}";
+        sendCommand("kick " + nickname + " " + jsonMessage);
+    }
+
+    private String toAsciiJson(String value) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            switch (ch) {
+                case '\\' -> sb.append("\\\\");
+                case '"' -> sb.append("\\\"");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (ch < 32 || ch > 126) {
+                        sb.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        sb.append(ch);
+                    }
+                }
+            }
+        }
+        return sb.toString();
     }
 }
