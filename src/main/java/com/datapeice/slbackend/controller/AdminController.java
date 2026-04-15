@@ -173,6 +173,18 @@ public class AdminController {
         }
     }
 
+    @PostMapping("/users/{id}/reset-minecraft-password")
+    public ResponseEntity<?> resetUserMinecraftPassword(@PathVariable Long id, @AuthenticationPrincipal User admin) {
+        try {
+            userService.resetUserMinecraftPassword(id, admin.getId(), admin.getUsername());
+            return ResponseEntity.ok(java.util.Map.of(
+                    "status", "success",
+                    "message", "Minecraft пароль пользователя сброшен"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
     @PatchMapping("/users/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> updateUser(

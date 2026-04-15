@@ -351,6 +351,25 @@ public class UserService {
     }
 
     @Transactional
+    public void resetUserMinecraftPassword(Long userId, Long adminId, String adminName) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
+
+        if (user.getRole() == UserRole.ROLE_ADMIN || user.getRole() == UserRole.ROLE_MODERATOR) {
+            throw new IllegalArgumentException("Нельзя сбросить пароль администратору или модератору");
+        }
+
+        if (user.getMinecraftNickname() == null || user.getMinecraftNickname().isBlank()) {
+            throw new IllegalArgumentException("У пользователя не указан Minecraft никнейм");
+        }
+
+        rconService.resetPlayerPassword(user.getMinecraftNickname());
+
+        auditLogService.logAction(adminId, adminName, "ADMIN_RESET_MINECRAFT_PASSWORD",
+                "Сброшен пароль Minecraft через RCON", user.getId(), user.getUsername());
+    }
+
+    @Transactional
     public void resetAllUsersSeason(Long adminId, String adminName) {
         userRepository.resetSeasonForAll();
         auditLogService.logAction(adminId, adminName, "ADMIN_RESET_SEASON",
@@ -469,6 +488,7 @@ public class UserService {
                     rconService.addPlayerToWhitelist(user.getMinecraftNickname());
                 } else {
                     rconService.removePlayerFromWhitelist(user.getMinecraftNickname());
+                    rconService.kickPlayerWithBanMessage(user.getMinecraftNickname(), "Ваш статус игрока был отозван администраторо " + adminName);
                 }
 
                 // Sync @SL Discord role

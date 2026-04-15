@@ -65,6 +65,13 @@ public class RconService {
     }
 
     @Async
+    public void resetPlayerPassword(String nickname) {
+        if (nickname == null || nickname.trim().isEmpty()) {
+            return;
+        }
+        sendCommand("auth remove " + nickname);
+    }
+    @Async
     public void kickPlayerWithBanMessage(String nickname, String reason) {
         if (nickname == null || nickname.trim().isEmpty()) {
             return;

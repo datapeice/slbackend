@@ -51,4 +51,6 @@ public class UserController {
     public ResponseEntity<PublicUserResponse> getPublicUser(@PathVariable Long id) {
         return ResponseEntity.ok(userService.getPublicUser(id));
     }
+
+
 }
