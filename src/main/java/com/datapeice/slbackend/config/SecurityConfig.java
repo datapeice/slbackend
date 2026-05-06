@@ -100,6 +100,7 @@ public class SecurityConfig {
                                                                                 "https://test.storylegends.xyz")
                                                                                 .contains(request.getHeader("Origin")))
                                                 .permitAll()
+                                                .requestMatchers("/ws/**").permitAll()
                                                 .requestMatchers("/error").permitAll()
                                                 .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "MODERATOR")
                                                 .anyRequest().authenticated())
