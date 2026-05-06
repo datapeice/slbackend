@@ -342,11 +342,6 @@ public class AdminController {
         }
     }
 
-    // ==================== Site Settings ====================
-
-    /**
-     * GET /api/admin/settings — full settings for admin panel (ROLE_ADMIN only)
-     */
     @GetMapping("/settings")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<SiteSettings> getSettings() {
@@ -361,12 +356,6 @@ public class AdminController {
         return ResponseEntity.ok(updated);
     }
 
-    /**
-     * GET /api/admin/settings/public — public read-only settings (no auth
-     * required).
-     * Returns only fields the frontend needs to conditionally show forms.
-     * CORS-restricted to allowed origins.
-     */
     @GetMapping("/settings/public")
     @PreAuthorize("permitAll()")
     public ResponseEntity<java.util.Map<String, Object>> getPublicSettings() {
@@ -376,7 +365,7 @@ public class AdminController {
                 "registrationOpen", settings.isRegistrationOpen()));
     }
 
-    // ==================== Logs ====================
+    // logiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
 
     @GetMapping("/logs")
     @PreAuthorize("hasRole('ADMIN')")
