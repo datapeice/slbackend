@@ -22,6 +22,8 @@ import org.springframework.data.domain.Sort;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+
 @RestController
 @RequestMapping("/api/admin")
 @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
@@ -33,12 +35,14 @@ public class AdminController {
     private final SiteSettingsService siteSettingsService;
     private final com.datapeice.slbackend.service.AuditLogService auditLogService;
     private final com.datapeice.slbackend.service.TotpService totpService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public AdminController(ApplicationService applicationService, UserService userService,
             BadgeService badgeService, WarningService warningService,
             SiteSettingsService siteSettingsService,
             com.datapeice.slbackend.service.AuditLogService auditLogService,
-            com.datapeice.slbackend.service.TotpService totpService) {
+            com.datapeice.slbackend.service.TotpService totpService,
+            SimpMessagingTemplate messagingTemplate) {
         this.applicationService = applicationService;
         this.userService = userService;
         this.badgeService = badgeService;
@@ -46,6 +50,7 @@ public class AdminController {
         this.siteSettingsService = siteSettingsService;
         this.auditLogService = auditLogService;
         this.totpService = totpService;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @GetMapping("/applications")
@@ -81,6 +86,7 @@ public class AdminController {
         try {
             ApplicationResponse response = applicationService.updateApplicationStatus(id, request, admin.getId(),
                     admin.getUsername());
+            messagingTemplate.convertAndSend("/topic/admin/applications", response);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -145,6 +151,7 @@ public class AdminController {
             @AuthenticationPrincipal User admin) {
         try {
             UserResponse response = userService.banUser(id, request.getReason(), admin.getId(), admin.getUsername());
+            messagingTemplate.convertAndSend("/topic/admin/users", response);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -155,6 +162,7 @@ public class AdminController {
     public ResponseEntity<?> unbanUser(@PathVariable Long id, @AuthenticationPrincipal User admin) {
         try {
             UserResponse response = userService.unbanUser(id, admin.getId(), admin.getUsername());
+            messagingTemplate.convertAndSend("/topic/admin/users", response);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -193,6 +201,7 @@ public class AdminController {
             @AuthenticationPrincipal User admin) {
         try {
             UserResponse response = userService.adminUpdateUser(id, request, admin.getId(), admin.getUsername());
+            messagingTemplate.convertAndSend("/topic/admin/users", response);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());

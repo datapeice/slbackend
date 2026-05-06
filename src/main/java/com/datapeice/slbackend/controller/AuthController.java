@@ -34,6 +34,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+
 import java.security.SecureRandom;
 import java.util.Map;
 
@@ -57,6 +59,7 @@ public class AuthController {
     private final DiscordService discordService;
     private final SiteSettingsService siteSettingsService;
     private final com.datapeice.slbackend.service.AuditLogService auditLogService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Value("${email.verification.expiration}")
     private long emailVerificationExpiration;
@@ -86,7 +89,8 @@ public class AuthController {
             DiscordOAuthService discordOAuthService,
             DiscordService discordService,
             SiteSettingsService siteSettingsService,
-            com.datapeice.slbackend.service.AuditLogService auditLogService) {
+            com.datapeice.slbackend.service.AuditLogService auditLogService,
+            SimpMessagingTemplate messagingTemplate) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
@@ -101,6 +105,7 @@ public class AuthController {
         this.discordService = discordService;
         this.siteSettingsService = siteSettingsService;
         this.auditLogService = auditLogService;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @GetMapping("/public/settings")
@@ -193,6 +198,8 @@ public class AuthController {
             auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER",
                     String.format("Зарегистрировался (MC: %s)", user.getMinecraftNickname()),
                     user.getId(), user.getUsername());
+                    
+            messagingTemplate.convertAndSend("/topic/admin/users", userService.getUserByIdForAdmin(user.getId()));
 
             // Отправляем письмо подтверждения
             if (emailEnabled) {
@@ -214,6 +221,8 @@ public class AuthController {
         auditLogService.logAction(user.getId(), user.getUsername(), "USER_REGISTER",
                 String.format("Зарегистрировался (MC: %s)", user.getMinecraftNickname()),
                 user.getId(), user.getUsername());
+                
+        messagingTemplate.convertAndSend("/topic/admin/users", userService.getUserByIdForAdmin(user.getId()));
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 user, null, user.getAuthorities());

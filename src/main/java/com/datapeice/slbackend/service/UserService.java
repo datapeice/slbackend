@@ -445,6 +445,8 @@ public class UserService {
                     && userRepository.existsByMinecraftNickname(request.getMinecraftNickname())) {
                 throw new IllegalArgumentException("Minecraft никнейм уже используется");
             }
+            rconService.removePlayerFromWhitelist(user.getMinecraftNickname());
+            rconService.addPlayerToWhitelist(request.getMinecraftNickname());
             changes.add("Minecraft Nick: " + user.getMinecraftNickname() + " -> " + request.getMinecraftNickname());
             user.setMinecraftNickname(request.getMinecraftNickname().isBlank() ? null
                     : HtmlUtils.htmlEscape(request.getMinecraftNickname()));

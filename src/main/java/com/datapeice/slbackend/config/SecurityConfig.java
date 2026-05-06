@@ -90,6 +90,16 @@ public class SecurityConfig {
                                                                                 "https://test.storylegends.xyz")
                                                                                 .contains(request.getHeader("Origin")))
                                                 .permitAll()
+                                                .requestMatchers(request -> request.getMethod().equals("GET") &&
+                                                                request.getRequestURI().startsWith("/api/pages/") &&
+                                                                request.getHeader("Origin") != null &&
+                                                                java.util.Arrays.asList(
+                                                                                "http://localhost:5173",
+                                                                                "https://www.storylegends.xyz",
+                                                                                "https://storylegends.xyz",
+                                                                                "https://test.storylegends.xyz")
+                                                                                .contains(request.getHeader("Origin")))
+                                                .permitAll()
                                                 .requestMatchers("/error").permitAll()
                                                 .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "MODERATOR")
                                                 .anyRequest().authenticated())
