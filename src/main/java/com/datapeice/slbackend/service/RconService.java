@@ -82,4 +82,16 @@ public class RconService {
                 : reason.replace("\r", " ").replace("\n", " ").trim();
         sendCommand("kick " + nickname + " Вы забанены! Причина: " + normalizedReason);
     }
+
+    /**
+     * Request an anticheat snapshot from a player via RCON.
+     * Sends: /camera anticheat <playerName>
+     */
+    public boolean requestAnticheatSnapshot(String playerName) {
+        if (playerName == null || playerName.trim().isEmpty()) {
+            return false;
+        }
+        return sendCommand("camera anticheat " + playerName);
+    }
 }
+
