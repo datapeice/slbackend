@@ -131,14 +131,18 @@ public class AnticheatController {
      */
     @GetMapping("/api/admin/anticheat/snapshots/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
-    public ResponseEntity<?> getSnapshot(@PathVariable Long id, @AuthenticationPrincipal User admin) {
+    public ResponseEntity<?> getSnapshot(@PathVariable Long id, 
+                                         @RequestParam(required = false, defaultValue = "false") boolean log,
+                                         @AuthenticationPrincipal User admin) {
         try {
-            auditLogService.logAction(
-                    admin.getId(), admin.getUsername(),
-                    "ANTICHEAT_VIEW_SNAPSHOT",
-                    "Открыл логи снимка #" + id,
-                    null, null
-            );
+            if (log) {
+                auditLogService.logAction(
+                        admin.getId(), admin.getUsername(),
+                        "ANTICHEAT_VIEW_SNAPSHOT",
+                        "Открыл логи снимка #" + id,
+                        null, null
+                );
+            }
             return ResponseEntity.ok(anticheatService.getSnapshotById(id));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
