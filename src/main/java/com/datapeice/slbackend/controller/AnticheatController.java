@@ -131,8 +131,14 @@ public class AnticheatController {
      */
     @GetMapping("/api/admin/anticheat/snapshots/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
-    public ResponseEntity<?> getSnapshot(@PathVariable Long id) {
+    public ResponseEntity<?> getSnapshot(@PathVariable Long id, @AuthenticationPrincipal User admin) {
         try {
+            auditLogService.logAction(
+                    admin.getId(), admin.getUsername(),
+                    "ANTICHEAT_VIEW_SNAPSHOT",
+                    "Открыл логи снимка #" + id,
+                    null, null
+            );
             return ResponseEntity.ok(anticheatService.getSnapshotById(id));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.notFound().build();
@@ -199,12 +205,6 @@ public class AnticheatController {
             @AuthenticationPrincipal User admin) {
 
         KnownModDto saved = knownModService.save(request, admin.getUsername());
-        auditLogService.logAction(
-                admin.getId(), admin.getUsername(),
-                "KNOWN_MOD_SAVED",
-                "Пометил мод '" + saved.getName() + "' как " + saved.getStatus(),
-                null, saved.getName()
-        );
         return ResponseEntity.ok(saved);
     }
 
@@ -216,12 +216,6 @@ public class AnticheatController {
             @AuthenticationPrincipal User admin) {
 
         knownModService.delete(id);
-        auditLogService.logAction(
-                admin.getId(), admin.getUsername(),
-                "KNOWN_MOD_DELETED",
-                "Удалил метку мода id=" + id,
-                null, String.valueOf(id)
-        );
-        return ResponseEntity.ok(Map.of("status", "deleted"));
+        return ResponseEntity.ok(Map.of("message", "Deleted known mod"));
     }
 }
