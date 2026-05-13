@@ -3,6 +3,7 @@ package com.datapeice.slbackend.service;
 import com.datapeice.slbackend.dto.AnticheatPayloadRequest;
 import com.datapeice.slbackend.dto.AnticheatSnapshotResponse;
 import com.datapeice.slbackend.entity.AnticheatSnapshot;
+import com.datapeice.slbackend.entity.KnownMod;
 import com.datapeice.slbackend.repository.AnticheatSnapshotRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -25,16 +26,19 @@ public class AnticheatService {
     private final AnticheatSnapshotRepository snapshotRepository;
     private final RconService rconService;
     private final ObjectMapper objectMapper;
+    private final KnownModService knownModService;
 
     @Value("${anticheat.retention-days:14}")
     private int retentionDays;
 
     public AnticheatService(AnticheatSnapshotRepository snapshotRepository,
                             RconService rconService,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper,
+                            KnownModService knownModService) {
         this.snapshotRepository = snapshotRepository;
         this.rconService = rconService;
         this.objectMapper = objectMapper;
+        this.knownModService = knownModService;
     }
 
     /**
@@ -128,8 +132,16 @@ public class AnticheatService {
         response.setLauncherBrand(snapshot.getLauncherBrand());
         response.setCreatedAt(snapshot.getCreatedAt());
 
-        // Parse mods from JSON
-        response.setMods(parseJsonList(snapshot.getMods()));
+        // Parse mods from JSON and annotate with known status
+        List<String> modNames = parseJsonList(snapshot.getMods());
+        List<KnownMod> knownMods = knownModService.findAll();
+        List<AnticheatSnapshotResponse.ModEntry> modEntries = modNames.stream()
+                .map(name -> new AnticheatSnapshotResponse.ModEntry(
+                        name,
+                        knownModService.resolveModStatus(name, knownMods)
+                ))
+                .toList();
+        response.setMods(modEntries);
 
         // Parse resource packs from JSON
         response.setResourcePacks(parseJsonList(snapshot.getResourcePacks()));

@@ -17,10 +17,19 @@ public class AnticheatSnapshotResponse {
     private String playerUuid;
     private String launcherName;
     private String launcherBrand;
-    private List<String> mods;
+    private List<ModEntry> mods;
     private List<String> resourcePacks;
     private List<ProcessInfo> processes;
     private LocalDateTime createdAt;
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class ModEntry {
+        private String name;
+        /** TRUSTED, SUSPICIOUS, or UNKNOWN */
+        private String status;
+    }
 
     @Data
     @AllArgsConstructor
@@ -33,3 +42,4 @@ public class AnticheatSnapshotResponse {
         private String windowTitle;
     }
 }
+

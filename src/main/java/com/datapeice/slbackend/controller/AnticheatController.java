@@ -2,10 +2,14 @@ package com.datapeice.slbackend.controller;
 
 import com.datapeice.slbackend.dto.AnticheatPayloadRequest;
 import com.datapeice.slbackend.dto.AnticheatSnapshotResponse;
+import com.datapeice.slbackend.dto.KnownModDto;
+import com.datapeice.slbackend.dto.KnownModRequest;
 import com.datapeice.slbackend.service.AnticheatService;
 import com.datapeice.slbackend.service.AuditLogService;
+import com.datapeice.slbackend.service.KnownModService;
 import com.datapeice.slbackend.entity.User;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -26,6 +30,7 @@ public class AnticheatController {
 
     private final AnticheatService anticheatService;
     private final AuditLogService auditLogService;
+    private final KnownModService knownModService;
 
     @Value("${anticheat.allowed-ips:}")
     private String allowedIpsRaw;
@@ -33,9 +38,12 @@ public class AnticheatController {
     @Value("${anticheat.api-key:}")
     private String apiKey;
 
-    public AnticheatController(AnticheatService anticheatService, AuditLogService auditLogService) {
+    public AnticheatController(AnticheatService anticheatService,
+                               AuditLogService auditLogService,
+                               KnownModService knownModService) {
         this.anticheatService = anticheatService;
         this.auditLogService = auditLogService;
+        this.knownModService = knownModService;
     }
 
     // ==================== Public endpoint (from Minecraft server) ====================
@@ -172,5 +180,48 @@ public class AnticheatController {
             return xForwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    // ==================== Known Mods endpoints ====================
+
+    /** Get all known (trusted/suspicious) mods */
+    @GetMapping("/api/admin/anticheat/known-mods")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
+    public ResponseEntity<List<KnownModDto>> getKnownMods() {
+        return ResponseEntity.ok(knownModService.getAll());
+    }
+
+    /** Create or update a known mod (upsert by name) */
+    @PostMapping("/api/admin/anticheat/known-mods")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<KnownModDto> saveKnownMod(
+            @Valid @RequestBody KnownModRequest request,
+            @AuthenticationPrincipal User admin) {
+
+        KnownModDto saved = knownModService.save(request, admin.getUsername());
+        auditLogService.logAction(
+                admin.getId(), admin.getUsername(),
+                "KNOWN_MOD_SAVED",
+                "Пометил мод '" + saved.getName() + "' как " + saved.getStatus(),
+                null, saved.getName()
+        );
+        return ResponseEntity.ok(saved);
+    }
+
+    /** Delete a known mod by id */
+    @DeleteMapping("/api/admin/anticheat/known-mods/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteKnownMod(
+            @PathVariable Long id,
+            @AuthenticationPrincipal User admin) {
+
+        knownModService.delete(id);
+        auditLogService.logAction(
+                admin.getId(), admin.getUsername(),
+                "KNOWN_MOD_DELETED",
+                "Удалил метку мода id=" + id,
+                null, String.valueOf(id)
+        );
+        return ResponseEntity.ok(Map.of("status", "deleted"));
     }
 }
