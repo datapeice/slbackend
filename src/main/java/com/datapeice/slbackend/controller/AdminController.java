@@ -131,12 +131,13 @@ public class AdminController {
     public ResponseEntity<Page<UserResponse>> getAllUsers(
             @RequestParam(required = false) String query,
             @RequestParam(required = false) String role,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
 
         // Sort by id descending (newest first)
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-        return ResponseEntity.ok(userService.getAllUsersForAdmin(query, role, pageable));
+        return ResponseEntity.ok(userService.getAllUsersForAdmin(query, role, status, pageable));
     }
 
     @GetMapping("/users/{id}")

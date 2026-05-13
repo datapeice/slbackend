@@ -210,7 +210,7 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UserResponse> getAllUsersForAdmin(String query, String role, Pageable pageable) {
+    public Page<UserResponse> getAllUsersForAdmin(String query, String role, String status, Pageable pageable) {
         UserRole userRole = null;
         if (role != null && !role.isBlank()) {
             try {
@@ -218,14 +218,12 @@ public class UserService {
             } catch (IllegalArgumentException ignored) {}
         }
 
-        Page<User> users;
-        if (query != null && !query.isBlank()) {
-            users = userRepository.findBySearch(query, userRole, pageable);
-        } else if (userRole != null) {
-            users = userRepository.findBySearch("", userRole, pageable);
-        } else {
-            users = userRepository.findAll(pageable);
-        }
+        Page<User> users = userRepository.findBySearchAndStatus(
+                query != null && !query.isBlank() ? query : null,
+                userRole,
+                status != null && !status.isBlank() ? status : null,
+                pageable
+        );
 
         return users.map(u -> {
             UserResponse r = mapToResponse(u, false);
