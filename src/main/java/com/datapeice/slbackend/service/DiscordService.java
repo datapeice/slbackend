@@ -258,9 +258,7 @@ public class DiscordService {
                     userRepository.findByDiscordUserId(discordUserId).ifPresent(user -> {
                         user.setInDiscord(true);
                         userRepository.save(user);
-                        if (!user.isPlayer()) {
-                            rconService.addPlayerToWhitelist(user.getMinecraftNickname());
-                        }
+
                         logger.info("Discord user {} joined the guild. Updated inDiscord to true for user {}",
                                 discordUserId, user.getUsername());
                     });
