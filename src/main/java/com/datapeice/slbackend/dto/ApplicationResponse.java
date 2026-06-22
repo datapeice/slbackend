@@ -16,6 +16,7 @@ public class ApplicationResponse {
     private Integer selfRating;
     private ApplicationStatus status;
     private String adminComment;
+    private String handledBy;
     private LocalDateTime createdAt;
     private UserSummary user;
 

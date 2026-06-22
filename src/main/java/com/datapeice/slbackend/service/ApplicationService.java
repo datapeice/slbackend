@@ -204,6 +204,7 @@ public class ApplicationService {
 
         application.setStatus(request.getStatus());
         application.setAdminComment(request.getAdminComment());
+        application.setHandledBy(adminName);
 
         SiteSettings settings = siteSettingsService.getSettings();
 
@@ -293,6 +294,7 @@ public class ApplicationService {
         response.setSelfRating(application.getSelfRating());
         response.setStatus(application.getStatus());
         response.setAdminComment(application.getAdminComment());
+        response.setHandledBy(application.getHandledBy());
         response.setCreatedAt(application.getCreatedAt());
 
         ApplicationResponse.UserSummary userSummary = new ApplicationResponse.UserSummary();

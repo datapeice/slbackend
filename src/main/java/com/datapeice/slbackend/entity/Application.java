@@ -40,6 +40,8 @@ public class Application {
 
     private String adminComment;
 
+    private String handledBy;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 
