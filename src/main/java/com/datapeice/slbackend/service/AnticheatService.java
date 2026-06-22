@@ -27,6 +27,7 @@ public class AnticheatService {
     private final RconService rconService;
     private final ObjectMapper objectMapper;
     private final KnownModService knownModService;
+    private final AuditLogService auditLogService;
 
     @Value("${anticheat.retention-days:14}")
     private int retentionDays;
@@ -34,12 +35,15 @@ public class AnticheatService {
     public AnticheatService(AnticheatSnapshotRepository snapshotRepository,
                             RconService rconService,
                             ObjectMapper objectMapper,
-                            KnownModService knownModService) {
+                            KnownModService knownModService,
+                            AuditLogService auditLogService) {
         this.snapshotRepository = snapshotRepository;
         this.rconService = rconService;
         this.objectMapper = objectMapper;
         this.knownModService = knownModService;
+        this.auditLogService = auditLogService;
     }
+
 
     /**
      * Save a new anticheat snapshot from Minecraft server telemetry.
@@ -68,10 +72,106 @@ public class AnticheatService {
             }
         }
 
+        // Analyze anomalies
+        analyzeSnapshotAnomaly(snapshot);
+
         AnticheatSnapshot saved = snapshotRepository.save(snapshot);
         log.info("[Anticheat] Saved snapshot #{} for player {}", saved.getId(), saved.getPlayerName());
+
+        // Log suspicious incident in system audit logs
+        if (Boolean.TRUE.equals(saved.getSuspicious())) {
+            auditLogService.logAction(
+                    null, "SYSTEM_ANTICHEAT", "ANTICHEAT_ANOMALY",
+                    String.format("Обнаружена аномалия античита у игрока %s (Коэффициент: %.2f). Детали: %s",
+                            saved.getPlayerName(), saved.getAnomalyScore(), saved.getAnomalyDetails()),
+                    null, saved.getPlayerName()
+            );
+        }
+
         return saved;
     }
+
+    private void analyzeSnapshotAnomaly(AnticheatSnapshot snapshot) {
+        double score = 0.0;
+        List<String> details = new ArrayList<>();
+
+        // 1. Check client brand / launcher
+        String brand = snapshot.getLauncherBrand() != null ? snapshot.getLauncherBrand().toLowerCase() : "";
+        if (brand.contains("cheat") || brand.contains("hack") || brand.contains("wurst") || brand.contains("meteor")) {
+            score += 0.5;
+            details.add("Подозрительный бренд лаунчера: " + snapshot.getLauncherBrand());
+        }
+
+        // 2. Check mods (by database status)
+        List<String> modNames = parseJsonList(snapshot.getMods());
+        List<KnownMod> knownMods = knownModService.findAll();
+        int suspiciousModsCount = 0;
+        int unknownModsCount = 0;
+
+        for (String name : modNames) {
+            String status = knownModService.resolveModStatus(name, knownMods);
+            if ("SUSPICIOUS".equals(status)) {
+                suspiciousModsCount++;
+                score += 0.4; // heavy penalty
+                details.add("Запрещенный мод: " + name);
+            } else if ("UNKNOWN".equals(status)) {
+                unknownModsCount++;
+            }
+        }
+
+        // Slight penalty for too many unknown mods
+        if (unknownModsCount > 8) {
+            double unknownPenalty = Math.min(0.2, (unknownModsCount - 8) * 0.02);
+            score += unknownPenalty;
+            details.add("Много неизвестных модов (" + unknownModsCount + ")");
+        }
+
+        // 3. Check processes and window titles
+        List<AnticheatSnapshotResponse.ProcessInfo> processes = parseProcesses(snapshot.getProcesses());
+
+        List<String> badProcessKeywords = java.util.Arrays.asList(
+                "cheatengine", "cheat engine", "cheat_engine", "processhacker",
+                "process hacker", "cheat-packer", "hacked client", "wurst",
+                "meteorclient", "liquidbounce", "aristois", "forgehax", "flux"
+        );
+
+        List<String> badTitleKeywords = java.util.Arrays.asList(
+                "cheat engine", "process hacker", "meteor client", "wurst client",
+                "liquidbounce", "aristois client", "hacked client", "killionaire"
+        );
+
+        for (AnticheatSnapshotResponse.ProcessInfo proc : processes) {
+            String imageName = proc.getImageName() != null ? proc.getImageName().toLowerCase() : "";
+            String windowTitle = proc.getWindowTitle() != null ? proc.getWindowTitle().toLowerCase() : "";
+
+            for (String kw : badProcessKeywords) {
+                if (imageName.contains(kw)) {
+                    score += 0.5;
+                    details.add("Подозрительный процесс: " + proc.getImageName());
+                    break;
+                }
+            }
+
+            for (String kw : badTitleKeywords) {
+                if (windowTitle.contains(kw)) {
+                    score += 0.5;
+                    details.add("Подозрительный заголовок окна: \"" + proc.getWindowTitle() + "\"");
+                    break;
+                }
+            }
+        }
+
+        score = Math.min(1.0, score);
+        snapshot.setAnomalyScore(score);
+        snapshot.setSuspicious(score >= 0.4 || suspiciousModsCount > 0);
+
+        if (details.isEmpty()) {
+            snapshot.setAnomalyDetails("Аномалий не обнаружено. Система чиста.");
+        } else {
+            snapshot.setAnomalyDetails(String.join(" | ", details));
+        }
+    }
+
 
     /**
      * Get snapshots for a specific player.
@@ -149,8 +249,13 @@ public class AnticheatService {
         // Parse processes from CSV-like string
         response.setProcesses(parseProcesses(snapshot.getProcesses()));
 
+        response.setAnomalyScore(snapshot.getAnomalyScore());
+        response.setSuspicious(snapshot.getSuspicious());
+        response.setAnomalyDetails(snapshot.getAnomalyDetails());
+
         return response;
     }
+
 
     private List<String> parseJsonList(String json) {
         if (json == null || json.isBlank()) {

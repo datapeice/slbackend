@@ -21,6 +21,10 @@ public class AnticheatSnapshotResponse {
     private List<String> resourcePacks;
     private List<ProcessInfo> processes;
     private LocalDateTime createdAt;
+    private Double anomalyScore;
+    private Boolean suspicious;
+    private String anomalyDetails;
+
 
     @Data
     @AllArgsConstructor

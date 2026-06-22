@@ -37,4 +37,12 @@ public class AnticheatSnapshot {
 
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    private Double anomalyScore = 0.0;
+
+    private Boolean suspicious = false;
+
+    @Column(columnDefinition = "TEXT")
+    private String anomalyDetails;
 }
+

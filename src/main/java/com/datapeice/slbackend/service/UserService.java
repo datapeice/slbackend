@@ -854,4 +854,30 @@ public class UserService {
                     user.getId(), user.getUsername());
         });
     }
+
+    private String extractRawIp(String ipString) {
+        if (ipString == null || ipString.isBlank()) return null;
+        if (ipString.contains(",")) {
+            String[] parts = ipString.split(",");
+            return parts[parts.length - 1].trim();
+        }
+        return ipString.trim();
+    }
+
+    public List<UserResponse> getRelatedAccounts(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
+
+        String ip1 = extractRawIp(user.getRegistrationIp());
+        String ip2 = extractRawIp(user.getLastLoginIp1());
+        String ip3 = extractRawIp(user.getLastLoginIp2());
+
+        if (ip1 == null && ip2 == null && ip3 == null) {
+            return java.util.Collections.emptyList();
+        }
+
+        return userRepository.findRelatedAccountsByRawIps(userId, ip1, ip2, ip3).stream()
+                .map(u -> mapToResponse(u, true))
+                .collect(Collectors.toList());
+    }
 }

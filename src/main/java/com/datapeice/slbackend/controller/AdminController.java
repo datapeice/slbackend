@@ -446,4 +446,13 @@ public class AdminController {
                     + "\nУбедитесь, что pg_dump установлен и доступен в PATH.").getBytes());
         }
     }
+
+    @GetMapping("/users/{id}/related-accounts")
+    public ResponseEntity<List<UserResponse>> getRelatedAccounts(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(userService.getRelatedAccounts(id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(null);
+        }
+    }
 }
