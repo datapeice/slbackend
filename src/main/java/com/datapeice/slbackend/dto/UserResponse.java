@@ -32,6 +32,9 @@ public class UserResponse {
     // Badges (without @SL role)
     private List<BadgeResponse> badges;
 
+    // Warnings count (active only)
+    private long warningsCount;
+
     // Security info (admin-only fields, populated only for admin endpoint)
     private String registrationIp;
     private String registrationUserAgent;

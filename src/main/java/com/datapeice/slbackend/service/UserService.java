@@ -253,6 +253,11 @@ public class UserService {
 
     @Transactional
     public UserResponse banUser(Long userId, String reason, Long adminId, String adminName) {
+        return banUser(userId, reason, adminId, adminName, false);
+    }
+
+    @Transactional
+    public UserResponse banUser(Long userId, String reason, Long adminId, String adminName, boolean silent) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
@@ -274,15 +279,15 @@ public class UserService {
 
         SiteSettings settings = getSiteSettings();
 
-        if (settings.isSendDiscordDmOnBan() && user.getDiscordUserId() != null && discordService.isEnabled()) {
+        if (!silent && settings.isSendDiscordDmOnBan() && user.getDiscordUserId() != null && discordService.isEnabled()) {
             discordService.removeSlRole(user.getDiscordUserId());
             discordService.sendDirectMessage(user.getDiscordUserId(),
                     "🚫 **StoryLegends** — Ваш аккаунт был **заблокирован** администрацией.\n" +
                             "**Причина:** " + normalizedReason + "\n" +
                             "**Модератор:** " + adminName + "\n" +
                             "***С уважением, <:slteam:1244336090928906351>***");
-        } else if (!settings.isSendDiscordDmOnBan() && user.getDiscordUserId() != null && discordService.isEnabled()) {
-            // Still remove the role even if DM is disabled
+        } else if (user.getDiscordUserId() != null && discordService.isEnabled()) {
+            // Still remove the role even if DM is disabled or silent ban is requested
             discordService.removeSlRole(user.getDiscordUserId());
         }
 
@@ -291,7 +296,7 @@ public class UserService {
         }
 
         auditLogService.logAction(adminId, adminName, "ADMIN_BAN_USER",
-                "Забанил пользователя. Причина: " + normalizedReason,
+                "Забанил пользователя. Причина: " + normalizedReason + (silent ? " (без уведомления в Discord)" : ""),
                 user.getId(), user.getUsername());
 
         return mapToResponse(updated);
@@ -814,6 +819,7 @@ public class UserService {
             response.setLastLoginUserAgent2(user.getLastLoginUserAgent2());
         }
 
+        response.setWarningsCount(warningRepository.countByUserIdAndActiveTrue(user.getId()));
         response.setBoosted(user.isBoosted());
 
         return response;

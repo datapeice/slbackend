@@ -151,7 +151,8 @@ public class AdminController {
             @Valid @RequestBody BanUserRequest request,
             @AuthenticationPrincipal User admin) {
         try {
-            UserResponse response = userService.banUser(id, request.getReason(), admin.getId(), admin.getUsername());
+            boolean silent = request.getSilent() != null && request.getSilent();
+            UserResponse response = userService.banUser(id, request.getReason(), admin.getId(), admin.getUsername(), silent);
             messagingTemplate.convertAndSend("/topic/admin/users", response);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {

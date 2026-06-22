@@ -7,5 +7,7 @@ import lombok.Data;
 public class BanUserRequest {
     @NotBlank(message = "Укажите причину бана")
     private String reason;
+
+    private Boolean silent = false;
 }
 
