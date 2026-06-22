@@ -46,6 +46,15 @@ public class KnownModService {
         log.info("[KnownMods] Deleted known mod id={}", id);
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public void deleteByName(String name) {
+        repository.findByNameIgnoreCase(name.trim().toLowerCase())
+                .ifPresent(mod -> {
+                    repository.delete(mod);
+                    log.info("[KnownMods] Deleted known mod name='{}'", name);
+                });
+    }
+
     /**
      * Resolve the status of a mod filename against the known mods list.
      * Uses case-insensitive substring matching.

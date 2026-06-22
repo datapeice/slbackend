@@ -29,6 +29,8 @@ public class UserResponse {
     @JsonProperty("isBoosted")
     private boolean isBoosted;
 
+    private LocalDateTime createdAt;
+
     // Badges (without @SL role)
     private List<BadgeResponse> badges;
 

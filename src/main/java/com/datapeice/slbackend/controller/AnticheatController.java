@@ -222,4 +222,15 @@ public class AnticheatController {
         knownModService.delete(id);
         return ResponseEntity.ok(Map.of("message", "Deleted known mod"));
     }
+
+    /** Delete a known mod by name */
+    @DeleteMapping("/api/admin/anticheat/known-mods/name/{name}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteKnownModByName(
+            @PathVariable String name,
+            @AuthenticationPrincipal User admin) {
+
+        knownModService.deleteByName(name);
+        return ResponseEntity.ok(Map.of("message", "Deleted known mod by name"));
+    }
 }

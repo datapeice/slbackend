@@ -791,6 +791,7 @@ public class UserService {
         response.setInSeason(user.isInSeason());
         response.setDiscordUserId(user.getDiscordUserId());
         response.setDiscordVerified(user.isDiscordVerified());
+        response.setCreatedAt(user.getCreatedAt());
 
         response.setInDiscordServer(user.isInDiscord() ||
                 discordService.isMemberInGuildCached(user.getDiscordUserId(), user.getDiscordNickname()));

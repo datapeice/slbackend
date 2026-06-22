@@ -98,6 +98,9 @@ public class User implements UserDetails {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private Integer tokenVersion = 0;
 
+    @Column(name = "created_at", nullable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    private java.time.LocalDateTime createdAt = java.time.LocalDateTime.now();
+
     // Badges
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "user_badges", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "badge_id"))
