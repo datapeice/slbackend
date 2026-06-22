@@ -73,4 +73,26 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @org.springframework.data.repository.query.Param("ip1") String ip1,
             @org.springframework.data.repository.query.Param("ip2") String ip2,
             @org.springframework.data.repository.query.Param("ip3") String ip3);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(u) > 0 FROM User u WHERE u.id != :userId AND (" +
+            "u.registrationIp LIKE CONCAT('%', :ip1) OR u.lastLoginIp1 LIKE CONCAT('%', :ip1) OR u.lastLoginIp2 LIKE CONCAT('%', :ip1) OR " +
+            "u.registrationIp LIKE CONCAT('%', :ip2) OR u.lastLoginIp1 LIKE CONCAT('%', :ip2) OR u.lastLoginIp2 LIKE CONCAT('%', :ip2) OR " +
+            "u.registrationIp LIKE CONCAT('%', :ip3) OR u.lastLoginIp1 LIKE CONCAT('%', :ip3) OR u.lastLoginIp2 LIKE CONCAT('%', :ip3)" +
+            ")")
+    boolean existsRelatedAccounts(
+            @org.springframework.data.repository.query.Param("userId") Long userId,
+            @org.springframework.data.repository.query.Param("ip1") String ip1,
+            @org.springframework.data.repository.query.Param("ip2") String ip2,
+            @org.springframework.data.repository.query.Param("ip3") String ip3);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(u) > 0 FROM User u WHERE u.id != :userId AND u.banned = true AND (" +
+            "u.registrationIp LIKE CONCAT('%', :ip1) OR u.lastLoginIp1 LIKE CONCAT('%', :ip1) OR u.lastLoginIp2 LIKE CONCAT('%', :ip1) OR " +
+            "u.registrationIp LIKE CONCAT('%', :ip2) OR u.lastLoginIp1 LIKE CONCAT('%', :ip2) OR u.lastLoginIp2 LIKE CONCAT('%', :ip2) OR " +
+            "u.registrationIp LIKE CONCAT('%', :ip3) OR u.lastLoginIp1 LIKE CONCAT('%', :ip3) OR u.lastLoginIp2 LIKE CONCAT('%', :ip3)" +
+            ")")
+    boolean existsBannedRelatedAccounts(
+            @org.springframework.data.repository.query.Param("userId") Long userId,
+            @org.springframework.data.repository.query.Param("ip1") String ip1,
+            @org.springframework.data.repository.query.Param("ip2") String ip2,
+            @org.springframework.data.repository.query.Param("ip3") String ip3);
 }

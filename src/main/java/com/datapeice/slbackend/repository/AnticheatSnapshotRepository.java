@@ -16,6 +16,8 @@ public interface AnticheatSnapshotRepository extends JpaRepository<AnticheatSnap
 
     Page<AnticheatSnapshot> findByPlayerNameIgnoreCaseOrderByCreatedAtDesc(String playerName, Pageable pageable);
 
+    boolean existsByPlayerNameIgnoreCaseAndSuspiciousTrue(String playerName);
+
     Page<AnticheatSnapshot> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     @Query("SELECT s FROM AnticheatSnapshot s WHERE LOWER(s.playerName) LIKE LOWER(CONCAT('%', :query, '%')) ORDER BY s.createdAt DESC")

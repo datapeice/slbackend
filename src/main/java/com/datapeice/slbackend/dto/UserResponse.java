@@ -35,6 +35,10 @@ public class UserResponse {
     // Warnings count (active only)
     private long warningsCount;
 
+    private boolean hasCoincidences;
+    private boolean hasBannedCoincidences;
+    private boolean hasSuspiciousMods;
+
     // Security info (admin-only fields, populated only for admin endpoint)
     private String registrationIp;
     private String registrationUserAgent;

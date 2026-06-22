@@ -12,6 +12,7 @@ import com.datapeice.slbackend.entity.SiteSettings;
 import com.datapeice.slbackend.repository.UserRepository;
 import com.datapeice.slbackend.repository.ApplicationRepository;
 import com.datapeice.slbackend.repository.WarningRepository;
+import com.datapeice.slbackend.repository.AnticheatSnapshotRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,7 @@ public class UserService {
     private final ApplicationRepository applicationRepository;
     private final WarningRepository warningRepository;
     private final RconService rconService;
+    private final AnticheatSnapshotRepository anticheatSnapshotRepository;
 
     public UserService(UserRepository userRepository,
             AuditLogService auditLogService,
@@ -49,7 +51,8 @@ public class UserService {
             BCryptPasswordEncoder passwordEncoder,
             ApplicationRepository applicationRepository,
             WarningRepository warningRepository,
-            RconService rconService) {
+            RconService rconService,
+            AnticheatSnapshotRepository anticheatSnapshotRepository) {
         this.userRepository = userRepository;
         this.auditLogService = auditLogService;
         this.discordService = discordService;
@@ -62,6 +65,7 @@ public class UserService {
         this.applicationRepository = applicationRepository;
         this.warningRepository = warningRepository;
         this.rconService = rconService;
+        this.anticheatSnapshotRepository = anticheatSnapshotRepository;
     }
 
     private SiteSettings getSiteSettings() {
@@ -821,6 +825,42 @@ public class UserService {
 
         response.setWarningsCount(warningRepository.countByUserIdAndActiveTrue(user.getId()));
         response.setBoosted(user.isBoosted());
+
+        // Calculate dossier warning status indicators (IP matches, suspicious mods)
+        boolean hasCoincidences = false;
+        boolean hasBannedCoincidences = false;
+        try {
+            String ip1 = extractRawIp(user.getRegistrationIp());
+            String ip2 = extractRawIp(user.getLastLoginIp1());
+            String ip3 = extractRawIp(user.getLastLoginIp2());
+
+            if (ip1 != null || ip2 != null || ip3 != null) {
+                String qIp1 = ip1 != null ? ip1 : "DUMMY_IP_NO_MATCH";
+                String qIp2 = ip2 != null ? ip2 : "DUMMY_IP_NO_MATCH";
+                String qIp3 = ip3 != null ? ip3 : "DUMMY_IP_NO_MATCH";
+
+                hasCoincidences = userRepository.existsRelatedAccounts(user.getId(), qIp1, qIp2, qIp3);
+                hasBannedCoincidences = userRepository.existsBannedRelatedAccounts(user.getId(), qIp1, qIp2, qIp3);
+            }
+        } catch (Exception e) {
+            // Safe fallback
+        }
+        response.setHasCoincidences(hasCoincidences);
+        response.setHasBannedCoincidences(hasBannedCoincidences);
+
+        boolean hasSuspiciousMods = false;
+        try {
+            String mcNick = user.getMinecraftNickname();
+            if (mcNick == null || mcNick.isBlank()) {
+                mcNick = user.getUsername();
+            }
+            if (mcNick != null && !mcNick.isBlank()) {
+                hasSuspiciousMods = anticheatSnapshotRepository.existsByPlayerNameIgnoreCaseAndSuspiciousTrue(mcNick);
+            }
+        } catch (Exception e) {
+            // Safe fallback
+        }
+        response.setHasSuspiciousMods(hasSuspiciousMods);
 
         return response;
     }
