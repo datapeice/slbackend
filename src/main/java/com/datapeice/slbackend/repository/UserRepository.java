@@ -64,9 +64,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     java.util.List<User> findAllByBadgesContaining(Badge badge);
 
     @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.id != :userId AND (" +
-            "(:ip1 IS NOT NULL AND (u.registrationIp LIKE CONCAT('%', :ip1) OR u.lastLoginIp1 LIKE CONCAT('%', :ip1) OR u.lastLoginIp2 LIKE CONCAT('%', :ip1))) OR " +
-            "(:ip2 IS NOT NULL AND (u.registrationIp LIKE CONCAT('%', :ip2) OR u.lastLoginIp1 LIKE CONCAT('%', :ip2) OR u.lastLoginIp2 LIKE CONCAT('%', :ip2))) OR " +
-            "(:ip3 IS NOT NULL AND (u.registrationIp LIKE CONCAT('%', :ip3) OR u.lastLoginIp1 LIKE CONCAT('%', :ip3) OR u.lastLoginIp2 LIKE CONCAT('%', :ip3)))" +
+            "u.registrationIp LIKE CONCAT('%', :ip1) OR u.lastLoginIp1 LIKE CONCAT('%', :ip1) OR u.lastLoginIp2 LIKE CONCAT('%', :ip1) OR " +
+            "u.registrationIp LIKE CONCAT('%', :ip2) OR u.lastLoginIp1 LIKE CONCAT('%', :ip2) OR u.lastLoginIp2 LIKE CONCAT('%', :ip2) OR " +
+            "u.registrationIp LIKE CONCAT('%', :ip3) OR u.lastLoginIp1 LIKE CONCAT('%', :ip3) OR u.lastLoginIp2 LIKE CONCAT('%', :ip3)" +
             ")")
     List<User> findRelatedAccountsByRawIps(
             @org.springframework.data.repository.query.Param("userId") Long userId,

@@ -882,6 +882,10 @@ public class UserService {
             return java.util.Collections.emptyList();
         }
 
+        if (ip1 == null) ip1 = "DUMMY_IP_NO_MATCH";
+        if (ip2 == null) ip2 = "DUMMY_IP_NO_MATCH";
+        if (ip3 == null) ip3 = "DUMMY_IP_NO_MATCH";
+
         return userRepository.findRelatedAccountsByRawIps(userId, ip1, ip2, ip3).stream()
                 .map(u -> mapToResponse(u, true))
                 .collect(Collectors.toList());
