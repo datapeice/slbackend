@@ -29,6 +29,7 @@ public class SiteSettings {
     private boolean registrationOpen = true;
 
     // Maintenance settings
+    @Column(columnDefinition = "boolean default false")
     private boolean maintenanceMode = false;
 }
 

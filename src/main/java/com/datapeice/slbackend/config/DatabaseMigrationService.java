@@ -33,6 +33,7 @@ public class DatabaseMigrationService implements ApplicationRunner {
         addColumnIfNotExists("users", "discord_user_id", "VARCHAR(255)");
         addColumnIfNotExists("users", "last_login_time1", "TIMESTAMP");
         addColumnIfNotExists("users", "last_login_time2", "TIMESTAMP");
+        addColumnIfNotExists("site_settings", "maintenance_mode", "BOOLEAN NOT NULL DEFAULT FALSE");
         createWarningsTableIfNotExists();
         createSiteSettingsTableIfNotExists();
     }
@@ -105,7 +106,8 @@ public class DatabaseMigrationService implements ApplicationRunner {
                     send_email_on_application_approved BOOLEAN NOT NULL DEFAULT TRUE,
                     send_email_on_application_rejected BOOLEAN NOT NULL DEFAULT TRUE,
                     applications_open BOOLEAN NOT NULL DEFAULT TRUE,
-                    registration_open BOOLEAN NOT NULL DEFAULT TRUE
+                    registration_open BOOLEAN NOT NULL DEFAULT TRUE,
+                    maintenance_mode BOOLEAN NOT NULL DEFAULT FALSE
                 )
                 """);
             logger.info("site_settings table ensured");
