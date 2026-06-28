@@ -48,4 +48,6 @@ public class UserResponse {
     private String lastLoginUserAgent1;
     private String lastLoginIp2;
     private String lastLoginUserAgent2;
+    private LocalDateTime lastLoginTime1;
+    private LocalDateTime lastLoginTime2;
 }

@@ -364,7 +364,8 @@ public class AdminController {
         SiteSettings settings = siteSettingsService.getSettings();
         return ResponseEntity.ok(java.util.Map.of(
                 "applicationsOpen", settings.isApplicationsOpen(),
-                "registrationOpen", settings.isRegistrationOpen()));
+                "registrationOpen", settings.isRegistrationOpen(),
+                "maintenanceMode", settings.isMaintenanceMode()));
     }
 
     // logiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii

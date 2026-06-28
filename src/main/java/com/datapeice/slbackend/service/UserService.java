@@ -822,6 +822,8 @@ public class UserService {
             response.setLastLoginUserAgent1(user.getLastLoginUserAgent1());
             response.setLastLoginIp2(user.getLastLoginIp2());
             response.setLastLoginUserAgent2(user.getLastLoginUserAgent2());
+            response.setLastLoginTime1(user.getLastLoginTime1());
+            response.setLastLoginTime2(user.getLastLoginTime2());
         }
 
         response.setWarningsCount(warningRepository.countByUserIdAndActiveTrue(user.getId()));
@@ -874,8 +876,11 @@ public class UserService {
             // Shift: 1->2, new->1
             user.setLastLoginIp2(user.getLastLoginIp1());
             user.setLastLoginUserAgent2(user.getLastLoginUserAgent1());
+            user.setLastLoginTime2(user.getLastLoginTime1());
+
             user.setLastLoginIp1(geoIp);
             user.setLastLoginUserAgent1(userAgent);
+            user.setLastLoginTime1(java.time.LocalDateTime.now());
 
             // Resolve Discord user ID if not set
             if (user.getDiscordUserId() == null && discordService.isEnabled()) {

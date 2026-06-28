@@ -14,5 +14,6 @@ public class SiteSettingsRequest {
     private Boolean sendEmailOnApplicationRejected;
     private Boolean applicationsOpen;
     private Boolean registrationOpen;
+    private Boolean maintenanceMode;
 }
 

@@ -94,6 +94,9 @@ public class User implements UserDetails {
     private String lastLoginIp2;
     private String lastLoginUserAgent2;
 
+    private java.time.LocalDateTime lastLoginTime1;
+    private java.time.LocalDateTime lastLoginTime2;
+
     // JWT Token Version for instant invalidation on security events
     @Column(nullable = false, columnDefinition = "integer default 0")
     private Integer tokenVersion = 0;

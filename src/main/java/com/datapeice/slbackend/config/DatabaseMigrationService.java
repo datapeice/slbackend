@@ -31,6 +31,8 @@ public class DatabaseMigrationService implements ApplicationRunner {
         // Add new columns that may be missing in older deployments
         addColumnIfNotExists("users", "discord_verified", "BOOLEAN NOT NULL DEFAULT FALSE");
         addColumnIfNotExists("users", "discord_user_id", "VARCHAR(255)");
+        addColumnIfNotExists("users", "last_login_time1", "TIMESTAMP");
+        addColumnIfNotExists("users", "last_login_time2", "TIMESTAMP");
         createWarningsTableIfNotExists();
         createSiteSettingsTableIfNotExists();
     }

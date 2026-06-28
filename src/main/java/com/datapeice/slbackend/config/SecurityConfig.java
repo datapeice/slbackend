@@ -1,6 +1,7 @@
 package com.datapeice.slbackend.config;
 
 import com.datapeice.slbackend.security.JwtRequestFilter;
+import com.datapeice.slbackend.security.MaintenanceFilter;
 import com.datapeice.slbackend.service.CustomUserDetailsService;
 import com.datapeice.slbackend.security.CustomAccessDeniedHandler;
 import com.datapeice.slbackend.security.CustomAuthenticationEntryPoint;
@@ -28,14 +29,18 @@ import java.util.Arrays;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
         private final JwtRequestFilter jwtRequestFilter;
+        private final MaintenanceFilter maintenanceFilter;
         private final CustomUserDetailsService userDetailsService;
         private final CustomAccessDeniedHandler customAccessDeniedHandler;
         private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
-        SecurityConfig(JwtRequestFilter jwtRequestFilter, CustomUserDetailsService userDetailsService,
+        SecurityConfig(JwtRequestFilter jwtRequestFilter,
+                        MaintenanceFilter maintenanceFilter,
+                        CustomUserDetailsService userDetailsService,
                         CustomAccessDeniedHandler customAccessDeniedHandler,
                         CustomAuthenticationEntryPoint customAuthenticationEntryPoint) {
                 this.jwtRequestFilter = jwtRequestFilter;
+                this.maintenanceFilter = maintenanceFilter;
                 this.userDetailsService = userDetailsService;
                 this.customAccessDeniedHandler = customAccessDeniedHandler;
                 this.customAuthenticationEntryPoint = customAuthenticationEntryPoint;
@@ -105,7 +110,8 @@ public class SecurityConfig {
                                                 .requestMatchers("/error").permitAll()
                                                 .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "MODERATOR")
                                                 .anyRequest().authenticated())
-                                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+                                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class)
+                                .addFilterAfter(maintenanceFilter, JwtRequestFilter.class);
 
                 return http.build();
         }

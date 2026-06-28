@@ -85,6 +85,11 @@ public class SiteSettingsService {
             changes.add("Reg Open: " + settings.isRegistrationOpen() + " -> " + request.getRegistrationOpen());
             settings.setRegistrationOpen(request.getRegistrationOpen());
         }
+        if (request.getMaintenanceMode() != null
+                && !request.getMaintenanceMode().equals(settings.isMaintenanceMode())) {
+            changes.add("Maintenance Mode: " + settings.isMaintenanceMode() + " -> " + request.getMaintenanceMode());
+            settings.setMaintenanceMode(request.getMaintenanceMode());
+        }
 
         SiteSettings saved = siteSettingsRepository.save(settings);
 

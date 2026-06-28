@@ -34,9 +34,19 @@ public class RecaptchaService {
     @Value("${app.recaptcha.enabled:true}")
     private boolean recaptchaEnabled;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private SiteSettingsService siteSettingsService;
+
     private static final double MIN_SCORE = 0.5;
 
     public boolean verifyRecaptcha(String token, String action) {
+        // Если режим техобслуживания активен, пропускаем проверку reCAPTCHA
+        if (siteSettingsService != null && siteSettingsService.getSettings().isMaintenanceMode()) {
+            logger.info("reCAPTCHA check bypassed: maintenance mode is active");
+            return true;
+        }
+
         // Если reCAPTCHA отключена в конфиге
         if (!recaptchaEnabled) {
             logger.info("reCAPTCHA is disabled in config, skipping verification");

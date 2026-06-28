@@ -113,7 +113,8 @@ public class AuthController {
         SiteSettings settings = siteSettingsService.getSettings();
         return ResponseEntity.ok(Map.of(
                 "registrationOpen", settings.isRegistrationOpen(),
-                "applicationsOpen", settings.isApplicationsOpen()));
+                "applicationsOpen", settings.isApplicationsOpen(),
+                "maintenanceMode", settings.isMaintenanceMode()));
     }
 
     @PostMapping("/register")
@@ -323,6 +324,16 @@ public class AuthController {
             // Сначала загружаем пользователя для проверки TOTP
             User user = userRepository.findByUsername(body.getUsername())
                     .orElseThrow(() -> new RuntimeException("Неверное имя пользователя или пароль"));
+
+            // Проверяем режим техобслуживания
+            if (siteSettingsService.getSettings().isMaintenanceMode()) {
+                if (user.getRole() != UserRole.ROLE_ADMIN && user.getRole() != UserRole.ROLE_MODERATOR) {
+                    return ResponseEntity.status(503).body(Map.of(
+                            "error", "MAINTENANCE_MODE",
+                            "message", "На сайте ведутся технические работы. Вход разрешен только администраторам."
+                    ));
+                }
+            }
 
             // Проверяем TOTP если включен
             if (user.isTotpEnabled()) {

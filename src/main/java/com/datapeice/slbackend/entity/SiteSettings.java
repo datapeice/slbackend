@@ -27,5 +27,8 @@ public class SiteSettings {
 
     // Registration settings
     private boolean registrationOpen = true;
+
+    // Maintenance settings
+    private boolean maintenanceMode = false;
 }
 
