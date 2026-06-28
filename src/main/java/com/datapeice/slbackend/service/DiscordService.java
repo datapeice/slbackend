@@ -63,13 +63,15 @@ public class DiscordService {
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
     private final RconService rconService;
+    private final BotMessengerService botMessengerService;
 
     public DiscordService(FileStorageService fileStorageService, UserRepository userRepository, AuditLogService auditLogService,
-                          RconService rconService) {
+                          RconService rconService, @org.springframework.context.annotation.Lazy BotMessengerService botMessengerService) {
         this.fileStorageService = fileStorageService;
         this.userRepository = userRepository;
         this.auditLogService = auditLogService;
         this.rconService = rconService;
+        this.botMessengerService = botMessengerService;
     }
 
     private static final String MIMI_GIF_URL = "https://tenor.com/view/mimi-typh-heart-sit-mimi-the-dog-gif-13978401409055125823";
@@ -183,6 +185,24 @@ public class DiscordService {
         public void onMessageReceived(MessageReceivedEvent event) {
             if (event.getAuthor().isBot())
                 return;
+
+            if (event.isFromType(net.dv8tion.jda.api.entities.channel.ChannelType.PRIVATE)) {
+                String discordUserId = event.getAuthor().getId();
+                String rawText = event.getMessage().getContentRaw();
+                String mediaUrl = null;
+
+                if (!event.getMessage().getAttachments().isEmpty()) {
+                    net.dv8tion.jda.api.entities.Message.Attachment att = event.getMessage().getAttachments().get(0);
+                    mediaUrl = att.getUrl();
+                }
+
+                try {
+                    botMessengerService.processIncomingPlayerMessage(discordUserId, rawText, mediaUrl, event.getMessageId());
+                } catch (Exception e) {
+                    logger.error("Error processing incoming player DM from {}: {}", discordUserId, e.getMessage());
+                }
+            }
+
             String content = event.getMessage().getContentDisplay().toLowerCase();
             // mimi/мими пасхалка
             if (content.contains("mimi") || content.contains("мими")) {

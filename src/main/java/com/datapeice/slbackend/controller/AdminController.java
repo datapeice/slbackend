@@ -215,6 +215,7 @@ public class AdminController {
     public ResponseEntity<?> deleteUser(@PathVariable Long id, @AuthenticationPrincipal User admin) {
         try {
             userService.deleteUser(id, admin.getId(), admin.getUsername());
+            messagingTemplate.convertAndSend("/topic/admin/users", Map.of("deletedUserId", id));
             return ResponseEntity.ok(java.util.Map.of(
                     "status", "success",
                     "message", "Пользователь удален"));
@@ -229,6 +230,7 @@ public class AdminController {
             @AuthenticationPrincipal User admin) {
         try {
             UserResponse response = userService.createUser(request, admin.getId(), admin.getUsername());
+            messagingTemplate.convertAndSend("/topic/admin/users", response);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());

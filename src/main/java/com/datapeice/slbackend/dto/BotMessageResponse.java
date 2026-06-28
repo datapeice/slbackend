@@ -12,6 +12,7 @@ public class BotMessageResponse {
     private String content;
     private String mediaUrl;
     private boolean isEdited;
+    private boolean isFromPlayer;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

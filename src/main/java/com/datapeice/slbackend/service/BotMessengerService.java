@@ -7,6 +7,7 @@ import com.datapeice.slbackend.entity.BotMessage;
 import com.datapeice.slbackend.entity.User;
 import com.datapeice.slbackend.repository.BotMessageRepository;
 import com.datapeice.slbackend.repository.UserRepository;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,15 +22,18 @@ public class BotMessengerService {
     private final UserRepository userRepository;
     private final DiscordService discordService;
     private final UserService userService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public BotMessengerService(BotMessageRepository botMessageRepository,
                                UserRepository userRepository,
                                DiscordService discordService,
-                               UserService userService) {
+                               UserService userService,
+                               SimpMessagingTemplate messagingTemplate) {
         this.botMessageRepository = botMessageRepository;
         this.userRepository = userRepository;
         this.discordService = discordService;
         this.userService = userService;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @Transactional(readOnly = true)
@@ -128,7 +132,38 @@ public class BotMessengerService {
             );
         }
 
-        return mapToResponse(saved);
+        BotMessageResponse response = mapToResponse(saved);
+        messagingTemplate.convertAndSend("/topic/admin/messenger", response);
+        return response;
+    }
+
+    @Transactional
+    public void processIncomingPlayerMessage(String discordUserId, String content, String mediaUrl, String discordMessageId) {
+        User playerUser = userRepository.findByDiscordUserId(discordUserId).orElse(null);
+        if (playerUser == null) {
+            // Try fallback search by discord nickname
+            Optional<User> byNick = userRepository.findAll().stream()
+                    .filter(u -> discordUserId.equals(u.getDiscordUserId()) || (u.getDiscordNickname() != null && !u.getDiscordNickname().isBlank()))
+                    .findFirst();
+            if (byNick.isPresent()) {
+                playerUser = byNick.get();
+            } else {
+                return; // User not associated with any registered site user
+            }
+        }
+
+        BotMessage message = new BotMessage();
+        message.setRecipientUser(playerUser);
+        message.setSenderAdmin(null);
+        message.setContent(content != null ? content : "");
+        message.setMediaUrl(mediaUrl);
+        message.setDiscordMessageId(discordMessageId);
+        message.setFromPlayer(true);
+        message.setCreatedAt(LocalDateTime.now());
+
+        BotMessage saved = botMessageRepository.save(message);
+        BotMessageResponse response = mapToResponse(saved);
+        messagingTemplate.convertAndSend("/topic/admin/messenger", response);
     }
 
     @Transactional
@@ -153,7 +188,9 @@ public class BotMessengerService {
             );
         }
 
-        return mapToResponse(updated);
+        BotMessageResponse response = mapToResponse(updated);
+        messagingTemplate.convertAndSend("/topic/admin/messenger", response);
+        return response;
     }
 
     @Transactional
@@ -167,6 +204,8 @@ public class BotMessengerService {
         }
 
         botMessageRepository.delete(message);
+        Map<String, Object> deletePayload = Map.of("deletedMessageId", messageId, "recipientUserId", recipient != null ? recipient.getId() : 0);
+        messagingTemplate.convertAndSend("/topic/admin/messenger", deletePayload);
     }
 
     private BotMessageResponse mapToResponse(BotMessage msg) {
@@ -174,10 +213,11 @@ public class BotMessengerService {
         dto.setId(msg.getId());
         dto.setRecipientUserId(msg.getRecipientUser().getId());
         dto.setRecipientUsername(msg.getRecipientUser().getUsername());
-        dto.setSenderAdminName(msg.getSenderAdmin() != null ? msg.getSenderAdmin().getUsername() : "Бот");
+        dto.setSenderAdminName(msg.isFromPlayer() ? msg.getRecipientUser().getUsername() : (msg.getSenderAdmin() != null ? msg.getSenderAdmin().getUsername() : "Бот"));
         dto.setContent(msg.getContent());
         dto.setMediaUrl(msg.getMediaUrl());
         dto.setEdited(msg.isEdited());
+        dto.setFromPlayer(msg.isFromPlayer());
         dto.setCreatedAt(msg.getCreatedAt());
         dto.setUpdatedAt(msg.getUpdatedAt());
         return dto;

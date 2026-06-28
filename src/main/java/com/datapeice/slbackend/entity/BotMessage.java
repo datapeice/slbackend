@@ -31,6 +31,8 @@ public class BotMessage {
 
     private boolean isEdited = false;
 
+    private boolean isFromPlayer = false;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
