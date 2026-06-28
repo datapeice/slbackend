@@ -25,4 +25,6 @@ public class AdminUpdateUserRequest {
     private String role;
 
     private Boolean unlinkDiscord;
+
+    private Boolean silent;
 }

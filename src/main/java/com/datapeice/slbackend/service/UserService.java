@@ -489,15 +489,16 @@ public class UserService {
         if (request.getIsPlayer() != null) {
             boolean wasPlayer = user.isPlayer();
             boolean nowPlayer = request.getIsPlayer();
+            boolean isSilent = request.getSilent() != null && request.getSilent();
 
             if (wasPlayer != nowPlayer) {
-                changes.add("IsPlayer: " + wasPlayer + " -> " + nowPlayer);
+                changes.add("IsPlayer: " + wasPlayer + " -> " + nowPlayer + (isSilent ? " (Silent)" : ""));
                 user.setPlayer(nowPlayer);
                 if (nowPlayer) {
                     rconService.addPlayerToWhitelist(user.getMinecraftNickname());
                 } else {
                     rconService.removePlayerFromWhitelist(user.getMinecraftNickname());
-                    rconService.kickPlayerWithBanMessage(user.getMinecraftNickname(), "Ваш статус игрока был отозван администраторо " + adminName);
+                    rconService.kickPlayerWithBanMessage(user.getMinecraftNickname(), "Ваш статус игрока был отозван администратором " + adminName);
                 }
 
                 // Sync @SL Discord role
@@ -510,22 +511,26 @@ public class UserService {
                     if (user.getDiscordUserId() != null) {
                         if (nowPlayer) {
                             discordService.assignSlRole(user.getDiscordUserId());
-                            discordService.sendDirectMessage(user.getDiscordUserId(),
-                                    "**Приветствую!**\n" +
-                                            "Вам выдана роль @SL на сервере StoryLegends\n" +
-                                            "Добро пожаловать на наш сервер, дабы **начать играть** вам нужно **прочитать** канал <#1229044440178626660>.\n"
-                                            +
-                                            "Так-же если вы ещё не ознакомилсь с [правилами](https://www.storylegends.xyz/rules) сервера, то обязательно это сделайте!\n"
-                                            +
-                                            "**Модератор:** " + adminName + "\n" +
-                                            "***С уважением, <:slteam:1244336090928906351>***");
+                            if (!isSilent) {
+                                discordService.sendDirectMessage(user.getDiscordUserId(),
+                                        "**Приветствую!**\n" +
+                                                "Вам выдана роль @SL на сервере StoryLegends\n" +
+                                                "Добро пожаловать на наш сервер, дабы **начать играть** вам нужно **прочитать** канал <#1229044440178626660>.\n"
+                                                +
+                                                "Так-же если вы ещё не ознакомилсь с [правилами](https://www.storylegends.xyz/rules) сервера, то обязательно это сделайте!\n"
+                                                +
+                                                "**Модератор:** " + adminName + "\n" +
+                                                "***С уважением, <:slteam:1244336090928906351>***");
+                            }
                         } else {
                             discordService.removeSlRole(user.getDiscordUserId());
-                            discordService.sendDirectMessage(user.getDiscordUserId(),
-                                    "**StoryLegends** — Ваш статус игрока был отозван администрацией. Роль @SL удалена.\n"
-                                            +
-                                            "**Модератор:** " + adminName + "\n" +
-                                            "**С уважением, <:slteam:1244336090928906351>**");
+                            if (!isSilent) {
+                                discordService.sendDirectMessage(user.getDiscordUserId(),
+                                        "**StoryLegends** — Ваш статус игрока был отозван администрацией. Роль @SL удалена.\n"
+                                                +
+                                                "**Модератор:** " + adminName + "\n" +
+                                                "**С уважением, <:slteam:1244336090928906351>**");
+                            }
                         }
                     }
                 }

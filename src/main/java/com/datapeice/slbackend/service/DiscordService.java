@@ -516,6 +516,68 @@ public class DiscordService {
         }
     }
 
+    public void sendDirectMessageAndGetId(String discordUserId, String messageContent, String mediaUrl, java.util.function.Consumer<String> onMessageSent) {
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank())
+            return;
+        try {
+            String fullContent = messageContent != null ? messageContent : "";
+            if (mediaUrl != null && !mediaUrl.isBlank()) {
+                if (!fullContent.isBlank()) {
+                    fullContent += "\n" + mediaUrl;
+                } else {
+                    fullContent = mediaUrl;
+                }
+            }
+            final String finalContent = fullContent;
+            jda.retrieveUserById(discordUserId).queue(user -> user.openPrivateChannel().queue(channel -> channel.sendMessage(finalContent).queue(
+                    success -> {
+                        logger.info("Bot DM sent to user: {}", discordUserId);
+                        if (onMessageSent != null) {
+                            onMessageSent.accept(success.getId());
+                        }
+                    },
+                    error -> logger.error("Failed to send Bot DM to {}: {}", discordUserId, error.getMessage())
+            )), error -> logger.error("Failed to find Discord user {}: {}", discordUserId, error.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error in sendDirectMessageAndGetId to {}: {}", discordUserId, e.getMessage());
+        }
+    }
+
+    public void editDirectMessage(String discordUserId, String discordMessageId, String newContent, String mediaUrl) {
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank() || discordMessageId == null || discordMessageId.isBlank())
+            return;
+        try {
+            String fullContent = newContent != null ? newContent : "";
+            if (mediaUrl != null && !mediaUrl.isBlank()) {
+                if (!fullContent.isBlank()) {
+                    fullContent += "\n" + mediaUrl;
+                } else {
+                    fullContent = mediaUrl;
+                }
+            }
+            final String finalContent = fullContent;
+            jda.retrieveUserById(discordUserId).queue(user -> user.openPrivateChannel().queue(channel -> channel.editMessageById(discordMessageId, finalContent).queue(
+                    success -> logger.info("Bot DM edited: {}", discordMessageId),
+                    error -> logger.error("Failed to edit Bot DM {}: {}", discordMessageId, error.getMessage())
+            )), error -> logger.error("Failed to find user for editing DM: {}", error.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error editing DM {}: {}", discordMessageId, e.getMessage());
+        }
+    }
+
+    public void deleteDirectMessage(String discordUserId, String discordMessageId) {
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank() || discordMessageId == null || discordMessageId.isBlank())
+            return;
+        try {
+            jda.retrieveUserById(discordUserId).queue(user -> user.openPrivateChannel().queue(channel -> channel.deleteMessageById(discordMessageId).queue(
+                    success -> logger.info("Bot DM deleted: {}", discordMessageId),
+                    error -> logger.error("Failed to delete Bot DM {}: {}", discordMessageId, error.getMessage())
+            )), error -> logger.error("Failed to find user for deleting DM: {}", error.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error deleting DM {}: {}", discordMessageId, e.getMessage());
+        }
+    }
+
     /**
      * Notify admins about a new application.
      * Uses discord.applications-channel.id if set, else sends DM to users with
