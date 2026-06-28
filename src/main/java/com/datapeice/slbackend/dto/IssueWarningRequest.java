@@ -7,5 +7,7 @@ import lombok.Data;
 public class IssueWarningRequest {
     @NotBlank(message = "Причина обязательна")
     private String reason;
+
+    private Integer durationDays;
 }
 

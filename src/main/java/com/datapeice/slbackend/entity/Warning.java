@@ -29,5 +29,8 @@ public class Warning {
     private LocalDateTime createdAt;
 
     private boolean active = true;
+
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
 }
 

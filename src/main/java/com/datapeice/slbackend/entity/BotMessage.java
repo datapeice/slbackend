@@ -35,6 +35,10 @@ public class BotMessage {
     @Column(name = "is_from_player", columnDefinition = "boolean default false")
     private boolean isFromPlayer = false;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("isRead")
+    @Column(name = "is_read", columnDefinition = "boolean default false")
+    private boolean isRead = false;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

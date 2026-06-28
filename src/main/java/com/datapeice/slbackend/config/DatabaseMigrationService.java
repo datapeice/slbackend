@@ -33,8 +33,11 @@ public class DatabaseMigrationService implements ApplicationRunner {
         addColumnIfNotExists("users", "discord_user_id", "VARCHAR(255)");
         addColumnIfNotExists("users", "last_login_time1", "TIMESTAMP");
         addColumnIfNotExists("users", "last_login_time2", "TIMESTAMP");
+        addColumnIfNotExists("users", "ban_expires_at", "TIMESTAMP");
         addColumnIfNotExists("site_settings", "maintenance_mode", "BOOLEAN NOT NULL DEFAULT FALSE");
         addColumnIfNotExists("bot_messages", "is_from_player", "BOOLEAN NOT NULL DEFAULT FALSE");
+        addColumnIfNotExists("bot_messages", "is_read", "BOOLEAN NOT NULL DEFAULT FALSE");
+        addColumnIfNotExists("warnings", "expires_at", "TIMESTAMP");
         createWarningsTableIfNotExists();
         createSiteSettingsTableIfNotExists();
     }

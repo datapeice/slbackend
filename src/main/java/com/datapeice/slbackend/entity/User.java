@@ -48,6 +48,9 @@ public class User implements UserDetails {
 
     private String banReason;
 
+    @Column(name = "ban_expires_at")
+    private java.time.LocalDateTime banExpiresAt;
+
     // Email verification
     private boolean emailVerified = false;
 

@@ -129,7 +129,7 @@ public class AdminController {
             applicationService.countApplicationsByStatus(ApplicationStatus.PENDING),
             userService.countActivePlayers(),
             userService.countBannedUsers(),
-            botMessageRepository.countByIsFromPlayerTrue(),
+            botMessageRepository.countByIsFromPlayerTrueAndIsReadFalse(),
             warningRepository.countByActiveTrue()
         );
         return ResponseEntity.ok(stats);
@@ -160,7 +160,7 @@ public class AdminController {
             @AuthenticationPrincipal User admin) {
         try {
             boolean silent = request.getSilent() != null && request.getSilent();
-            UserResponse response = userService.banUser(id, request.getReason(), admin.getId(), admin.getUsername(), silent);
+            UserResponse response = userService.banUser(id, request.getReason(), admin.getId(), admin.getUsername(), silent, request.getDurationDays());
             messagingTemplate.convertAndSend("/topic/admin/users", response);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
@@ -316,7 +316,7 @@ public class AdminController {
             @Valid @RequestBody IssueWarningRequest request,
             @AuthenticationPrincipal User admin) {
         try {
-            WarningResponse response = warningService.issueWarning(userId, request.getReason(), admin);
+            WarningResponse response = warningService.issueWarning(userId, request.getReason(), admin, request.getDurationDays());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());

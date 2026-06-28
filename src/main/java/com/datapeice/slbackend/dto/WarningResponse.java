@@ -13,5 +13,6 @@ public class WarningResponse {
     private String issuedByUsername;
     private LocalDateTime createdAt;
     private boolean active;
+    private LocalDateTime expiresAt;
 }
 

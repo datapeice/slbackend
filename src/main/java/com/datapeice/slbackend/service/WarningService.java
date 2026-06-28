@@ -42,6 +42,11 @@ public class WarningService {
 
     @Transactional
     public WarningResponse issueWarning(Long userId, String reason, User issuedBy) {
+        return issueWarning(userId, reason, issuedBy, null);
+    }
+
+    @Transactional
+    public WarningResponse issueWarning(Long userId, String reason, User issuedBy, Integer durationDays) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
@@ -50,10 +55,17 @@ public class WarningService {
         warning.setReason(reason);
         warning.setIssuedBy(issuedBy);
         warning.setActive(true);
+        if (durationDays != null && durationDays > 0) {
+            warning.setExpiresAt(java.time.LocalDateTime.now().plusDays(durationDays));
+        } else {
+            warning.setExpiresAt(null);
+        }
 
         Warning saved = warningRepository.save(warning);
 
         SiteSettings settings = siteSettingsService.getSettings();
+
+        String durationStr = (durationDays != null && durationDays > 0) ? (durationDays + " дней") : "Навсегда";
 
         // Send notifications
         if (settings.isSendDiscordDmOnWarning() && user.getDiscordUserId() != null && discordService.isEnabled()) {
@@ -61,6 +73,7 @@ public class WarningService {
             discordService.sendDirectMessage(user.getDiscordUserId(),
                     "⚠️ **StoryLegends** — Вы получили предупреждение!\n" +
                             "**Причина:** " + reason + "\n" +
+                            "**Срок:** " + durationStr + "\n" +
                             "**Модератор:** " + (issuedBy != null ? issuedBy.getUsername() : "Система") + "\n" +
                             "**Активных предупреждений:** " + activeCount + "/" + settings.getMaxWarningsBeforeBan()
                             + "\n" +
@@ -83,13 +96,13 @@ public class WarningService {
 
         auditLogService.logAction(issuedBy != null ? issuedBy.getId() : null,
                 issuedBy != null ? issuedBy.getUsername() : "Система",
-                "ADMIN_ISSUE_WARNING", "Выдал предупреждение. Причина: " + reason,
+                "ADMIN_ISSUE_WARNING", "Выдал предупреждение. Причина: " + reason + ", Срок: " + durationStr,
                 user.getId(), user.getUsername());
 
         return mapToResponse(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<WarningResponse> getUserWarnings(Long userId) {
         userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
@@ -119,6 +132,10 @@ public class WarningService {
     }
 
     private WarningResponse mapToResponse(Warning warning) {
+        if (warning.isActive() && warning.getExpiresAt() != null && java.time.LocalDateTime.now().isAfter(warning.getExpiresAt())) {
+            warning.setActive(false);
+            warningRepository.save(warning);
+        }
         WarningResponse response = new WarningResponse();
         response.setId(warning.getId());
         response.setUserId(warning.getUser().getId());
@@ -130,6 +147,7 @@ public class WarningService {
         }
         response.setCreatedAt(warning.getCreatedAt());
         response.setActive(warning.isActive());
+        response.setExpiresAt(warning.getExpiresAt());
         return response;
     }
 }

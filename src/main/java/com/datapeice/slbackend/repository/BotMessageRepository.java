@@ -20,4 +20,10 @@ public interface BotMessageRepository extends JpaRepository<BotMessage, Long> {
     void deleteByRecipientUserId(Long recipientUserId);
 
     long countByIsFromPlayerTrue();
+
+    long countByIsFromPlayerTrueAndIsReadFalse();
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE BotMessage bm SET bm.isRead = true WHERE bm.recipientUser.id = :userId AND bm.isFromPlayer = true AND bm.isRead = false")
+    void markPlayerMessagesAsRead(@Param("userId") Long userId);
 }

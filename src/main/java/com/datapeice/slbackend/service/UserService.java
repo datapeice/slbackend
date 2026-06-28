@@ -257,11 +257,16 @@ public class UserService {
 
     @Transactional
     public UserResponse banUser(Long userId, String reason, Long adminId, String adminName) {
-        return banUser(userId, reason, adminId, adminName, false);
+        return banUser(userId, reason, adminId, adminName, false, null);
     }
 
     @Transactional
     public UserResponse banUser(Long userId, String reason, Long adminId, String adminName, boolean silent) {
+        return banUser(userId, reason, adminId, adminName, silent, null);
+    }
+
+    @Transactional
+    public UserResponse banUser(Long userId, String reason, Long adminId, String adminName, boolean silent, Integer durationDays) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
 
@@ -270,6 +275,13 @@ public class UserService {
         user.setBanned(true);
         user.setBanReason(normalizedReason);
         user.setPlayer(false);
+
+        if (durationDays != null && durationDays > 0) {
+            user.setBanExpiresAt(java.time.LocalDateTime.now().plusDays(durationDays));
+        } else {
+            user.setBanExpiresAt(null);
+        }
+
         rconService.kickPlayerWithBanMessage(user.getMinecraftNickname(), normalizedReason);
         rconService.removePlayerFromWhitelist(user.getMinecraftNickname());
 
@@ -283,15 +295,17 @@ public class UserService {
 
         SiteSettings settings = getSiteSettings();
 
+        String durationStr = (durationDays != null && durationDays > 0) ? (durationDays + " дней") : "Навсегда";
+
         if (!silent && settings.isSendDiscordDmOnBan() && user.getDiscordUserId() != null && discordService.isEnabled()) {
             discordService.removeSlRole(user.getDiscordUserId());
             discordService.sendDirectMessage(user.getDiscordUserId(),
                     "🚫 **StoryLegends** — Ваш аккаунт был **заблокирован** администрацией.\n" +
                             "**Причина:** " + normalizedReason + "\n" +
+                            "**Срок:** " + durationStr + "\n" +
                             "**Модератор:** " + adminName + "\n" +
                             "***С уважением, <:slteam:1244336090928906351>***");
         } else if (user.getDiscordUserId() != null && discordService.isEnabled()) {
-            // Still remove the role even if DM is disabled or silent ban is requested
             discordService.removeSlRole(user.getDiscordUserId());
         }
 
@@ -300,7 +314,7 @@ public class UserService {
         }
 
         auditLogService.logAction(adminId, adminName, "ADMIN_BAN_USER",
-                "Забанил пользователя. Причина: " + normalizedReason + (silent ? " (без уведомления в Discord)" : ""),
+                "Забанил пользователя. Причина: " + normalizedReason + ", Срок: " + durationStr + (silent ? " (без уведомления в Discord)" : ""),
                 user.getId(), user.getUsername());
 
         return mapToResponse(updated);
@@ -787,8 +801,15 @@ public class UserService {
         response.setMinecraftNickname(user.getMinecraftNickname());
         response.setRole(user.getRole());
         response.setAvatarUrl(resolveAvatarUrl(user.getAvatarUrl(), user.getUsername()));
+        if (user.isBanned() && user.getBanExpiresAt() != null && java.time.LocalDateTime.now().isAfter(user.getBanExpiresAt())) {
+            user.setBanned(false);
+            user.setBanReason(null);
+            user.setBanExpiresAt(null);
+            userRepository.save(user);
+        }
         response.setBanned(user.isBanned());
         response.setBanReason(user.getBanReason());
+        response.setBanExpiresAt(user.getBanExpiresAt());
         response.setEmailVerified(user.isEmailVerified());
         response.setTotpEnabled(user.isTotpEnabled());
         response.setBio(user.getBio());

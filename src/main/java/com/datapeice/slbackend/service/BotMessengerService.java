@@ -88,8 +88,10 @@ public class BotMessengerService {
         return response;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<BotMessageResponse> getMessageHistory(Long recipientUserId) {
+        botMessageRepository.markPlayerMessagesAsRead(recipientUserId);
+        messagingTemplate.convertAndSend("/topic/admin/messenger", Map.of("readRecipientUserId", recipientUserId));
         return botMessageRepository.findByRecipientUserIdOrderByCreatedAtAsc(recipientUserId)
                 .stream()
                 .map(this::mapToResponse)
@@ -221,6 +223,7 @@ public class BotMessengerService {
         dto.setMediaUrl(msg.getMediaUrl());
         dto.setEdited(msg.isEdited());
         dto.setFromPlayer(msg.isFromPlayer());
+        dto.setRead(msg.isRead());
         dto.setCreatedAt(msg.getCreatedAt());
         dto.setUpdatedAt(msg.getUpdatedAt());
         return dto;

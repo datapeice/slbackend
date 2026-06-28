@@ -9,5 +9,7 @@ public class BanUserRequest {
     private String reason;
 
     private Boolean silent = false;
+
+    private Integer durationDays;
 }
 

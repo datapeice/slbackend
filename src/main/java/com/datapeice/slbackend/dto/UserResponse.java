@@ -17,6 +17,7 @@ public class UserResponse {
     private String avatarUrl;
     private boolean banned;
     private String banReason;
+    private LocalDateTime banExpiresAt;
     private boolean emailVerified;
     private boolean totpEnabled;
     private String bio;
