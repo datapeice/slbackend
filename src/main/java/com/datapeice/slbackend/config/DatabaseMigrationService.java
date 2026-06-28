@@ -34,6 +34,7 @@ public class DatabaseMigrationService implements ApplicationRunner {
         addColumnIfNotExists("users", "last_login_time1", "TIMESTAMP");
         addColumnIfNotExists("users", "last_login_time2", "TIMESTAMP");
         addColumnIfNotExists("site_settings", "maintenance_mode", "BOOLEAN NOT NULL DEFAULT FALSE");
+        addColumnIfNotExists("bot_messages", "is_from_player", "BOOLEAN NOT NULL DEFAULT FALSE");
         createWarningsTableIfNotExists();
         createSiteSettingsTableIfNotExists();
     }

@@ -31,6 +31,7 @@ public class BotMessage {
 
     private boolean isEdited = false;
 
+    @Column(name = "is_from_player", columnDefinition = "boolean default false")
     private boolean isFromPlayer = false;
 
     @Column(name = "created_at", nullable = false)
