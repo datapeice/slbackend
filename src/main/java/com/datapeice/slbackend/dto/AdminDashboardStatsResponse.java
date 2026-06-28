@@ -12,4 +12,6 @@ public class AdminDashboardStatsResponse {
     private long pendingApplications;
     private long activePlayers;
     private long bannedUsers;
+    private long playerMessagesCount;
+    private long activeWarningsCount;
 }

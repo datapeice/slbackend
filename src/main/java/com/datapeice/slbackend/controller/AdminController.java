@@ -35,6 +35,8 @@ public class AdminController {
     private final SiteSettingsService siteSettingsService;
     private final com.datapeice.slbackend.service.AuditLogService auditLogService;
     private final com.datapeice.slbackend.service.TotpService totpService;
+    private final com.datapeice.slbackend.repository.BotMessageRepository botMessageRepository;
+    private final com.datapeice.slbackend.repository.WarningRepository warningRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     public AdminController(ApplicationService applicationService, UserService userService,
@@ -42,7 +44,9 @@ public class AdminController {
             SiteSettingsService siteSettingsService,
             com.datapeice.slbackend.service.AuditLogService auditLogService,
             com.datapeice.slbackend.service.TotpService totpService,
-            SimpMessagingTemplate messagingTemplate) {
+            SimpMessagingTemplate messagingTemplate,
+            com.datapeice.slbackend.repository.BotMessageRepository botMessageRepository,
+            com.datapeice.slbackend.repository.WarningRepository warningRepository) {
         this.applicationService = applicationService;
         this.userService = userService;
         this.badgeService = badgeService;
@@ -51,6 +55,8 @@ public class AdminController {
         this.auditLogService = auditLogService;
         this.totpService = totpService;
         this.messagingTemplate = messagingTemplate;
+        this.botMessageRepository = botMessageRepository;
+        this.warningRepository = warningRepository;
     }
 
     @GetMapping("/applications")
@@ -122,7 +128,9 @@ public class AdminController {
             userService.getTotalUsersCount(),
             applicationService.countApplicationsByStatus(ApplicationStatus.PENDING),
             userService.countActivePlayers(),
-            userService.countBannedUsers()
+            userService.countBannedUsers(),
+            botMessageRepository.countByIsFromPlayerTrue(),
+            warningRepository.countByActiveTrue()
         );
         return ResponseEntity.ok(stats);
     }

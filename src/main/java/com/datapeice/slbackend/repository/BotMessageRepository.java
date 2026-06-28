@@ -18,4 +18,6 @@ public interface BotMessageRepository extends JpaRepository<BotMessage, Long> {
     List<BotMessage> findLatestMessagePerRecipient();
 
     void deleteByRecipientUserId(Long recipientUserId);
+
+    long countByIsFromPlayerTrue();
 }

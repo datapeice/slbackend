@@ -14,6 +14,8 @@ public interface WarningRepository extends JpaRepository<Warning, Long> {
 
     long countByUserIdAndActiveTrue(Long userId);
 
+    long countByActiveTrue();
+
     void deleteAllByUserId(Long userId);
 
     void deleteAllByIssuedById(Long issuedById);
