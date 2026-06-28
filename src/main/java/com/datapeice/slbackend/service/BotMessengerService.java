@@ -138,18 +138,21 @@ public class BotMessengerService {
     }
 
     @Transactional
-    public void processIncomingPlayerMessage(String discordUserId, String content, String mediaUrl, String discordMessageId) {
+    public void processIncomingPlayerMessage(String discordUserId, String authorName, String content, String mediaUrl, String discordMessageId) {
         User playerUser = userRepository.findByDiscordUserId(discordUserId).orElse(null);
+        if (playerUser == null && authorName != null) {
+            playerUser = userRepository.findAll().stream()
+                    .filter(u -> authorName.equalsIgnoreCase(u.getDiscordNickname()) || authorName.equalsIgnoreCase(u.getUsername()))
+                    .findFirst()
+                    .orElse(null);
+        }
         if (playerUser == null) {
-            // Try fallback search by discord nickname
-            Optional<User> byNick = userRepository.findAll().stream()
-                    .filter(u -> discordUserId.equals(u.getDiscordUserId()) || (u.getDiscordNickname() != null && !u.getDiscordNickname().isBlank()))
-                    .findFirst();
-            if (byNick.isPresent()) {
-                playerUser = byNick.get();
-            } else {
-                return; // User not associated with any registered site user
-            }
+            return; // User not associated with any registered site user
+        }
+
+        if (playerUser.getDiscordUserId() == null) {
+            playerUser.setDiscordUserId(discordUserId);
+            userRepository.save(playerUser);
         }
 
         BotMessage message = new BotMessage();

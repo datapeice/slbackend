@@ -1,5 +1,6 @@
 package com.datapeice.slbackend.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import java.time.LocalDateTime;
 
@@ -11,7 +12,9 @@ public class BotMessageResponse {
     private String senderAdminName;
     private String content;
     private String mediaUrl;
+    @JsonProperty("isEdited")
     private boolean isEdited;
+    @JsonProperty("isFromPlayer")
     private boolean isFromPlayer;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

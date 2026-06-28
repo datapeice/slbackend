@@ -197,7 +197,7 @@ public class DiscordService {
                 }
 
                 try {
-                    botMessengerService.processIncomingPlayerMessage(discordUserId, rawText, mediaUrl, event.getMessageId());
+                    botMessengerService.processIncomingPlayerMessage(discordUserId, event.getAuthor().getName(), rawText, mediaUrl, event.getMessageId());
                 } catch (Exception e) {
                     logger.error("Error processing incoming player DM from {}: {}", discordUserId, e.getMessage());
                 }
