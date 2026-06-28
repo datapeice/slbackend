@@ -391,6 +391,23 @@ public class AdminController {
         return ResponseEntity.ok(auditLogService.getLogs(query, pageable));
     }
 
+    @GetMapping("/users/{userId}/audit-logs")
+    public ResponseEntity<org.springframework.data.domain.Page<com.datapeice.slbackend.entity.AuditLog>> getUserAuditLogs(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size,
+                org.springframework.data.domain.Sort.by("createdAt").descending());
+        try {
+            UserResponse user = userService.getUserById(userId);
+            java.util.List<UserResponse> related = userService.getRelatedAccounts(userId);
+            java.util.List<Long> relatedIds = (related != null) ? related.stream().map(UserResponse::getId).collect(java.util.stream.Collectors.toList()) : java.util.Collections.emptyList();
+            return ResponseEntity.ok(auditLogService.getLogsForUser(userId, user.getUsername(), relatedIds, pageable));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     @PostMapping("/users/{userId}/log-dossier-view")
     public ResponseEntity<?> logDossierView(@PathVariable Long userId, @AuthenticationPrincipal User admin) {
         String targetUsername = "Unknown";

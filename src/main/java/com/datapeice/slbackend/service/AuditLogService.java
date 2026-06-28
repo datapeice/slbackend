@@ -56,4 +56,10 @@ public class AuditLogService {
             return auditLogRepository.searchLogs(query.trim(), pageable);
         }
     }
+
+    public Page<AuditLog> getLogsForUser(Long userId, String username, java.util.List<Long> relatedIds, Pageable pageable) {
+        boolean hasRelated = relatedIds != null && !relatedIds.isEmpty();
+        java.util.List<Long> safeRelated = hasRelated ? relatedIds : java.util.List.of(-1L);
+        return auditLogRepository.findUserRelatedLogs(userId, username != null ? username : "", safeRelated, hasRelated, pageable);
+    }
 }

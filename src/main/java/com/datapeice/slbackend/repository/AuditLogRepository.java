@@ -17,4 +17,15 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             "LOWER(a.actionType) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
             "LOWER(a.details) LIKE LOWER(CONCAT('%', :query, '%'))")
     Page<AuditLog> searchLogs(@Param("query") String query, Pageable pageable);
+
+    @Query("SELECT DISTINCT a FROM AuditLog a WHERE " +
+            "a.actorId = :userId OR a.targetUserId = :userId OR " +
+            "LOWER(a.actorUsername) = LOWER(:username) OR LOWER(a.targetUsername) = LOWER(:username) OR " +
+            "(:hasRelated = true AND (a.actorId IN :relatedIds OR a.targetUserId IN :relatedIds))")
+    Page<AuditLog> findUserRelatedLogs(
+            @Param("userId") Long userId,
+            @Param("username") String username,
+            @Param("relatedIds") java.util.List<Long> relatedIds,
+            @Param("hasRelated") boolean hasRelated,
+            Pageable pageable);
 }
