@@ -39,6 +39,9 @@ public class BotMessage {
     @Column(name = "is_read", columnDefinition = "boolean default false")
     private boolean isRead = false;
 
+    @Column(columnDefinition = "TEXT")
+    private String reactions;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

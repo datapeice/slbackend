@@ -213,6 +213,36 @@ public class BotMessengerService {
         messagingTemplate.convertAndSend("/topic/admin/messenger", deletePayload);
     }
 
+    @Transactional
+    public BotMessageResponse toggleReaction(Long messageId, String emoji) {
+        BotMessage message = botMessageRepository.findById(messageId)
+                .orElseThrow(() -> new IllegalArgumentException("Сообщение не найдено"));
+
+        String current = message.getReactions();
+        List<String> list = (current != null && !current.isBlank())
+                ? new ArrayList<>(Arrays.asList(current.split(",")))
+                : new ArrayList<>();
+
+        if (list.contains(emoji)) {
+            list.remove(emoji);
+        } else {
+            list.add(emoji);
+        }
+
+        String updated = String.join(",", list);
+        message.setReactions(updated.isBlank() ? null : updated);
+        BotMessage saved = botMessageRepository.save(message);
+
+        User recipient = saved.getRecipientUser();
+        if (recipient != null && recipient.getDiscordUserId() != null && saved.getDiscordMessageId() != null) {
+            discordService.addReactionToDirectMessage(recipient.getDiscordUserId(), saved.getDiscordMessageId(), emoji);
+        }
+
+        BotMessageResponse response = mapToResponse(saved);
+        messagingTemplate.convertAndSend("/topic/admin/messenger", response);
+        return response;
+    }
+
     private BotMessageResponse mapToResponse(BotMessage msg) {
         BotMessageResponse dto = new BotMessageResponse();
         dto.setId(msg.getId());
@@ -224,6 +254,7 @@ public class BotMessengerService {
         dto.setEdited(msg.isEdited());
         dto.setFromPlayer(msg.isFromPlayer());
         dto.setRead(msg.isRead());
+        dto.setReactions(msg.getReactions());
         dto.setCreatedAt(msg.getCreatedAt());
         dto.setUpdatedAt(msg.getUpdatedAt());
         return dto;

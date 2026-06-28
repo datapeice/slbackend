@@ -18,6 +18,7 @@ public class BotMessageResponse {
     private boolean isFromPlayer;
     @JsonProperty("isRead")
     private boolean isRead;
+    private String reactions;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -54,4 +54,10 @@ public class BotMessengerController {
         botMessengerService.deleteMessage(messageId);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/messages/{messageId}/react")
+    public ResponseEntity<BotMessageResponse> toggleReaction(@PathVariable Long messageId,
+                                                              @RequestParam String emoji) {
+        return ResponseEntity.ok(botMessengerService.toggleReaction(messageId, emoji));
+    }
 }

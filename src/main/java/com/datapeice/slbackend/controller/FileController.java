@@ -25,4 +25,10 @@ public class FileController {
                 this.auditLogService = auditLogService;
         }
 
+        @PostMapping("/upload")
+        public ResponseEntity<Map<String, String>> uploadFile(@RequestParam("file") MultipartFile file) {
+                String objectKey = fileStorageService.uploadFile(file, "messenger");
+                String url = fileStorageService.resolveUrl(objectKey);
+                return ResponseEntity.ok(Map.of("url", url, "key", objectKey));
+        }
 }

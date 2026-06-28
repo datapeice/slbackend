@@ -540,16 +540,31 @@ public class DiscordService {
         if (!isEnabled() || discordUserId == null || discordUserId.isBlank())
             return;
         try {
-            String fullContent = messageContent != null ? messageContent : "";
-            if (mediaUrl != null && !mediaUrl.isBlank()) {
-                if (!fullContent.isBlank()) {
-                    fullContent += "\n" + mediaUrl;
-                } else {
-                    fullContent = mediaUrl;
+            jda.retrieveUserById(discordUserId).queue(user -> user.openPrivateChannel().queue(channel -> {
+                net.dv8tion.jda.api.utils.messages.MessageCreateBuilder builder = new net.dv8tion.jda.api.utils.messages.MessageCreateBuilder();
+                if (messageContent != null && !messageContent.isBlank()) {
+                    builder.setContent(messageContent);
                 }
-            }
-            final String finalContent = fullContent;
-            jda.retrieveUserById(discordUserId).queue(user -> user.openPrivateChannel().queue(channel -> channel.sendMessage(finalContent).queue(
+                if (mediaUrl != null && !mediaUrl.isBlank()) {
+                    try {
+                        java.net.URL url = new java.net.URL(mediaUrl);
+                        java.io.InputStream in = url.openStream();
+                        String filename = mediaUrl.contains("/") ? mediaUrl.substring(mediaUrl.lastIndexOf("/") + 1) : "attachment.png";
+                        if (filename.contains("?")) filename = filename.substring(0, filename.indexOf("?"));
+                        builder.addFiles(net.dv8tion.jda.api.utils.FileUpload.fromData(in, filename));
+                    } catch (Exception e) {
+                        logger.error("Failed to stream media for Discord attachment, falling back to text URL: {}", e.getMessage());
+                        if (builder.getContent() == null || builder.getContent().isBlank()) {
+                            builder.setContent(mediaUrl);
+                        } else {
+                            builder.setContent(builder.getContent() + "\n" + mediaUrl);
+                        }
+                    }
+                }
+                if (builder.isEmpty()) {
+                    return;
+                }
+                channel.sendMessage(builder.build()).queue(
                     success -> {
                         logger.info("Bot DM sent to user: {}", discordUserId);
                         if (onMessageSent != null) {
@@ -557,9 +572,25 @@ public class DiscordService {
                         }
                     },
                     error -> logger.error("Failed to send Bot DM to {}: {}", discordUserId, error.getMessage())
-            )), error -> logger.error("Failed to find Discord user {}: {}", discordUserId, error.getMessage()));
+                );
+            }), error -> logger.error("Failed to find Discord user {}: {}", discordUserId, error.getMessage()));
         } catch (Exception e) {
             logger.error("Error in sendDirectMessageAndGetId to {}: {}", discordUserId, e.getMessage());
+        }
+    }
+
+    public void addReactionToDirectMessage(String discordUserId, String discordMessageId, String emoji) {
+        if (!isEnabled() || discordUserId == null || discordUserId.isBlank() || discordMessageId == null || discordMessageId.isBlank())
+            return;
+        try {
+            jda.retrieveUserById(discordUserId).queue(user -> user.openPrivateChannel().queue(channel -> {
+                channel.addReactionById(discordMessageId, net.dv8tion.jda.api.entities.emoji.Emoji.fromUnicode(emoji)).queue(
+                    success -> logger.info("Added reaction {} to DM {}", emoji, discordMessageId),
+                    error -> logger.error("Failed to add reaction to DM {}: {}", discordMessageId, error.getMessage())
+                );
+            }), error -> logger.error("Failed to find user for adding reaction: {}", error.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error adding reaction to DM {}: {}", discordMessageId, e.getMessage());
         }
     }
 

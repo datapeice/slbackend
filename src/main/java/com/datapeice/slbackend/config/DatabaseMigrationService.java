@@ -38,6 +38,7 @@ public class DatabaseMigrationService implements ApplicationRunner {
         addColumnIfNotExists("bot_messages", "is_from_player", "BOOLEAN NOT NULL DEFAULT FALSE");
         addColumnIfNotExists("bot_messages", "is_read", "BOOLEAN NOT NULL DEFAULT FALSE");
         addColumnIfNotExists("warnings", "expires_at", "TIMESTAMP");
+        addColumnIfNotExists("bot_messages", "reactions", "TEXT");
         createWarningsTableIfNotExists();
         createSiteSettingsTableIfNotExists();
     }
